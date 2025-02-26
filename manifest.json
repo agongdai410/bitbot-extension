@@ -1,0 +1,23 @@
+{
+  "manifest_version": 3,
+  "name": "Universal Embedder",
+  "version": "1.0",
+  "permissions": [
+    "sidePanel",
+    "declarativeNetRequestWithHostAccess",
+    "scripting"
+  ],
+  "host_permissions": [
+    "*://*/*"
+  ],
+  "side_panel": {
+    "default_path": "panel.html"
+  },
+  "declarative_net_request": {
+    "rule_resources": [{
+      "id": "bypass_security",
+      "enabled": true,
+      "path": "net_rules.json"
+    }]
+  }
+} 
