@@ -1,0 +1,14 @@
+{
+  "name": {
+    "message": "Anything Copilot: Ferramenta de IA Multitarefa, Chatgpt Real na barra later"
+  },
+  "short_name": {
+    "message": "Anything Copilot"
+  },
+  "description": {
+    "message": "Aprimore sua navegação na web com nossa ferramenta versátil. Abra facilmente qualquer site em uma barra lateral ou janela pop-up par"
+  },
+  "toggle_minimize_desc": {
+    "message": "Alternar mostrar/ocultar janela de Co-piloto"
+  }
+}

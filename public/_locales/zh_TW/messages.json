@@ -1,0 +1,14 @@
+{
+  "name": {
+    "message": "Anything Copilot: AI多工工具，實時Chatgpt側邊欄，Chatdoc"
+  },
+  "short_name": {
+    "message": "Anything Copilot"
+  },
+  "description": {
+    "message": "使用我們多功能工具增強網頁瀏覽體驗，輕鬆在側邊欄或彈出視窗中打開網站。"
+  },
+  "toggle_minimize_desc": {
+    "message": "切換顯示/隱藏Copilot視窗"
+  }
+}

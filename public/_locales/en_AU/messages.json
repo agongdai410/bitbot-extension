@@ -1,0 +1,14 @@
+{
+  "name": {
+    "message": "Anything Copilot: AI Multitasking Tool, Real Chatgpt sidebar, Chatdoc"
+  },
+  "short_name": {
+    "message": "Anything Copilot"
+  },
+  "description": {
+    "message": "Improve your web browsing with our versatile tool. Easily open any website in a sidebar or popup window for seamless multitasking."
+  },
+  "toggle_minimize_desc": {
+    "message": "Toggle show/hide Copilot window"
+  }
+}

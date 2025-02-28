@@ -1,0 +1,14 @@
+{
+  "name": {
+    "message": "Anything Copilot: Штучний інтелект, бокова панель Real Chatgpt, Chatdoc"
+  },
+  "short_name": {
+    "message": "Anything Copilot"
+  },
+  "description": {
+    "message": "Покращте свою веб-перегляд з нашим універсальним інструментом. Відкрийте будь-який сайт у бічній панелі або спливаючому вікні для бе"
+  },
+  "toggle_minimize_desc": {
+    "message": "Перемкнути вікно Співкерманича (показати/приховати)"
+  }
+}

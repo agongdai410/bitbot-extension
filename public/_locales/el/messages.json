@@ -1,0 +1,14 @@
+{
+  "name": {
+    "message": "Anything Copilot: Herramienta de IA multitarea, barra lateral de chatgpt re"
+  },
+  "short_name": {
+    "message": "Anything Copilot"
+  },
+  "description": {
+    "message": "Mejora tu navegación web con nuestra herramienta versátil. Abre fácilmente cualquier sitio en una barra lateral o ventana emergente."
+  },
+  "toggle_minimize_desc": {
+    "message": "Εναλλαγή εμφάνισης/απόκρυψης του παραθύρου του Συνοδηγού"
+  }
+}

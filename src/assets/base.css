@@ -1,0 +1,137 @@
+/* color palette from <https://github.com/vuejs/theme> */
+@tailwind base;
+@tailwind components;
+@tailwind utilities;
+
+:root,
+:host {
+  --vt-c-white: #ffffff;
+  --vt-c-white-soft: #f8f8f8;
+  --vt-c-white-mute: #f2f2f2;
+
+  --vt-c-black: #181818;
+  --vt-c-black-soft: #222222;
+  --vt-c-black-mute: #282828;
+
+  --vt-c-indigo: #2c3e50;
+
+  --vt-c-divider-light-1: rgba(60, 60, 60, 0.29);
+  --vt-c-divider-light-2: rgba(60, 60, 60, 0.12);
+  --vt-c-divider-dark-1: rgba(84, 84, 84, 0.65);
+  --vt-c-divider-dark-2: rgba(84, 84, 84, 0.48);
+
+  --vt-c-text-light-1: var(--vt-c-indigo);
+  --vt-c-text-light-2: rgba(60, 60, 60, 0.66);
+  --vt-c-text-dark-1: var(--vt-c-white);
+  --vt-c-text-dark-2: rgba(235, 235, 235, 0.64);
+}
+
+/* semantic color variables for this project */
+:root,
+:host {
+  --color-background: var(--vt-c-white);
+  --color-background-soft: var(--vt-c-white-soft);
+  --color-background-mute: var(--vt-c-white-mute);
+
+  --color-border: var(--vt-c-divider-light-2);
+  --color-border-hover: var(--vt-c-divider-light-1);
+
+  --color-heading: var(--vt-c-text-light-1);
+  --color-text: var(--vt-c-text-light-1);
+
+  --bg-rgb: 255, 255, 255;
+  --fg-rgb: 0, 0, 0;
+
+  --bg-hue: 200;
+  --bg-s: 5%;
+  --bg-l: 100%;
+  --bg-soft-l: 96%;
+  --bg-mute-l: 90%;
+
+  --fg-hue: 200;
+  --fg-s: 0%;
+  --fg-l: 0%;
+
+  --primary-hue: 36;
+  --primary-s: 100%;
+  --primary-l: 50%;
+
+  --primary-hsl: var(--primary-hue) var(--primary-s) var(--primary-l);
+  --bg-hsl: var(--bg-hue) var(--bg-s) var(--bg-l);
+  --fg-hsl: var(--fg-hue) var(--fg-s) var(--fg-l);
+
+  --section-gap: 160px;
+
+  color-scheme: light;
+}
+
+@media (prefers-color-scheme: dark) {
+  :root,
+  :host {
+    --color-background: var(--vt-c-black);
+    --color-background-soft: var(--vt-c-black-soft);
+    --color-background-mute: var(--vt-c-black-mute);
+
+    --color-border: var(--vt-c-divider-dark-2);
+    --color-border-hover: var(--vt-c-divider-dark-1);
+
+    --color-heading: var(--vt-c-text-dark-1);
+    --color-text: var(--vt-c-text-dark-2);
+
+    --bg-rgb: 0, 0, 0;
+    --fg-rgb: 255, 255, 255;
+
+    --bg-hue: 200;
+    --bg-s: 0%;
+    --bg-l: 10%;
+    --bg-soft-l: 14%;
+    --bg-mute-l: 20%;
+
+    --fg-hue: 200;
+    --fg-s: 0%;
+    --fg-l: 100%;
+
+    color-scheme: dark;
+  }
+
+  input,
+  textarea {
+    color-scheme: light dark;
+  }
+}
+
+*,
+*::before,
+*::after {
+  box-sizing: border-box;
+  margin: 0;
+  font-weight: normal;
+}
+
+body,
+#app,
+:root {
+  color: var(--color-text);
+  background: var(--color-background);
+  /* transition:
+    color 0.5s,
+    background-color 0.5s; */
+  line-height: 1.6;
+  font-family:
+    Inter,
+    -apple-system,
+    BlinkMacSystemFont,
+    "Segoe UI",
+    Roboto,
+    Oxygen,
+    Ubuntu,
+    Cantarell,
+    "Fira Sans",
+    "Droid Sans",
+    "Helvetica Neue",
+    sans-serif;
+  font-size: 15px;
+  text-rendering: optimizeLegibility;
+  -webkit-font-smoothing: antialiased;
+  -moz-osx-font-smoothing: grayscale;
+}

@@ -1,0 +1,14 @@
+{
+  "name": {
+    "message": "Anything Copilot: Instrument de multitasking AI, bara laterală Real Chatgpt"
+  },
+  "short_name": {
+    "message": "Anything Copilot"
+  },
+  "description": {
+    "message": "Îmbunătățiți navigarea pe web cu instrumentul nostru versatil. Deschideți cu ușurință orice site web într-o bară laterală sau fereas"
+  },
+  "toggle_minimize_desc": {
+    "message": "Comutați între afișarea/ascunderea ferestrei Copilot"
+  }
+}

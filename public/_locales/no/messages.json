@@ -1,0 +1,14 @@
+{
+  "name": {
+    "message": "Anything Copilot: AI Multitasking Tool, Real Chatgpt sidebar, Chatdoc"
+  },
+  "short_name": {
+    "message": "Anything Copilot"
+  },
+  "description": {
+    "message": "Tidak, buka situs web di sisi atau jendela popup untuk multitasking."
+  },
+  "toggle_minimize_desc": {
+    "message": "Bytt vis/skjul Medpilot-vinduet"
+  }
+}

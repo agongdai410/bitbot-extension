@@ -1,0 +1,14 @@
+{
+  "name": {
+    "message": "Anything Copilot: AIマルチタスキングツール、リアルチャットGPTサイドバー、チャットドック"
+  },
+  "short_name": {
+    "message": "Anything Copilot"
+  },
+  "description": {
+    "message": "当社の多機能ツールでWebブラウジングを向上させましょう。サイドバーやポップアップウィンドウでウェブサイトを簡単に開くことができます。"
+  },
+  "toggle_minimize_desc": {
+    "message": "Copilotウィンドウを切り替える"
+  }
+}

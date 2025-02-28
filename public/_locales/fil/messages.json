@@ -1,0 +1,14 @@
+{
+  "name": {
+    "message": "Anything Copilot: AI Multitasking Tool, Tunay na Chatgpt sidebar, Chatdoc"
+  },
+  "short_name": {
+    "message": "Anything Copilot"
+  },
+  "description": {
+    "message": "Palamutin ang iyong web browsing sa aming versatile tool. Madaling buksan ang anumang website sa isang sidebar o popup window para s"
+  },
+  "toggle_minimize_desc": {
+    "message": "I-on ang pagpapalit ng pagpapakita/pagtatago ng bintana ng Copilot"
+  }
+}

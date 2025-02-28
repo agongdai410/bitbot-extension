@@ -1,0 +1,14 @@
+{
+  "name": {
+    "message": "Anything Copilot: AI Multitasking Tool, Real Chatgpt sidebar, Chatdoc\nTrans"
+  },
+  "short_name": {
+    "message": "Anything Copilot"
+  },
+  "description": {
+    "message": "Kuza web browsing with our versatile tool. Open any website in a sidebar or popup."
+  },
+  "toggle_minimize_desc": {
+    "message": "કોપાયલોટ વિંડો બતાવવા/છુપાવવા ટૉગલ કરો"
+  }
+}

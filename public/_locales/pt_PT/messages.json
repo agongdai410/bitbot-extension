@@ -1,0 +1,14 @@
+{
+  "name": {
+    "message": "Anything Copilot: Ferramenta de IA Multitarefa, Barra lateral de Chatgpt re"
+  },
+  "short_name": {
+    "message": "Anything Copilot"
+  },
+  "description": {
+    "message": "Melhore a sua navegação na web com a nossa ferramenta versátil. Abra facilmente qualquer website numa barra lateral ou janela pop-up"
+  },
+  "toggle_minimize_desc": {
+    "message": "Alternar mostrar/ocultar janela do Copiloto"
+  }
+}
