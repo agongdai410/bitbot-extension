@@ -1,0 +1,14 @@
+{
+  "name": {
+    "message": "Gem Screener: AI Çoklu Görev Aracı, Gerçek Chatgpt kenar çubuğu, Chatdo"
+  },
+  "short_name": {
+    "message": "Gem Screener"
+  },
+  "description": {
+    "message": "Çok yönlü aracımızla web taramanızı geliştirin. Herhangi bir web sitesini yan çubukta veya açılır pencerede kolayca açın."
+  },
+  "toggle_minimize_desc": {
+    "message": "Yardımcı pencereyi göster/gizle"
+  }
+}

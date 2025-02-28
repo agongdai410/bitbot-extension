@@ -1,0 +1,14 @@
+{
+  "name": {
+    "message": "Gem Screener: AIマルチタスキングツール、リアルチャットGPTサイドバー、チャットドック"
+  },
+  "short_name": {
+    "message": "Gem Screener"
+  },
+  "description": {
+    "message": "当社の多機能ツールでWebブラウジングを向上させましょう。サイドバーやポップアップウィンドウでウェブサイトを簡単に開くことができます。"
+  },
+  "toggle_minimize_desc": {
+    "message": "Copilotウィンドウを切り替える"
+  }
+}

@@ -1,0 +1,14 @@
+{
+  "name": {
+    "message": "Gem Screener: view price chart, realtime trading\nTrans"
+  },
+  "short_name": {
+    "message": "Gem Screener"
+  },
+  "description": {
+    "message": "Enhance your web browsing with our versatile tool. Open any website easily."
+  },
+  "toggle_minimize_desc": {
+    "message": "सहाय्यक विंडो दाखवण्याचे/लपवण्याचे स्विच करा"
+  }
+}

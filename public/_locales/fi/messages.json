@@ -1,0 +1,14 @@
+{
+  "name": {
+    "message": "Gem Screener: Työkalu moniajoon, Oikea Chatgpt-sivupalkki, Chatdoc"
+  },
+  "short_name": {
+    "message": "Gem Screener"
+  },
+  "description": {
+    "message": "Paranna verkkoselaamistasi monipuolisella työkalullamme. Avaa helposti mikä tahansa verkkosivusto sivupalkissa tai ponnahdusikkunass"
+  },
+  "toggle_minimize_desc": {
+    "message": "Vaihda Copilot-ikkunan näyttö/piilotus"
+  }
+}

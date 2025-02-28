@@ -1,0 +1,14 @@
+{
+  "name": {
+    "message": "Gem Screener: view price chart, realtime trading"
+  },
+  "short_name": {
+    "message": "Gem Screener"
+  },
+  "description": {
+    "message": "Enhance your web browsing with our versatile tool. Easily open any website in a sidebar or popup window for seamless multitasking."
+  },
+  "toggle_minimize_desc": {
+    "message": "Toggle show/hide Copilot window"
+  }
+}

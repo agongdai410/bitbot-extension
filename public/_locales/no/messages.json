@@ -1,0 +1,14 @@
+{
+  "name": {
+    "message": "Gem Screener: view price chart, realtime trading"
+  },
+  "short_name": {
+    "message": "Gem Screener"
+  },
+  "description": {
+    "message": "Tidak, buka situs web di sisi atau jendela popup untuk multitasking."
+  },
+  "toggle_minimize_desc": {
+    "message": "Bytt vis/skjul Medpilot-vinduet"
+  }
+}

@@ -1,0 +1,14 @@
+{
+  "name": {
+    "message": "Gem Screener: view price chart, realtime trading"
+  },
+  "short_name": {
+    "message": "Gem Screener"
+  },
+  "description": {
+    "message": "Imelisha kivinjari chako cha wavuti na chombo chetu mchanganyiko. Fungua wavuti yoyote kwa urahisi kwenye upauaji au dirisha la kufu"
+  },
+  "toggle_minimize_desc": {
+    "message": "കോ-പയ്ലറ്റ് വിൻഡോ കാണാൻ/മറയ്ക്കാൻ ടോഗിൾ ചെയ്യുക"
+  }
+}

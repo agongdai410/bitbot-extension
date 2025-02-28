@@ -1,0 +1,14 @@
+{
+  "name": {
+    "message": "Gem Screener: Nástroj AI pro multitasking, Real Chatgpt boční panel, Ch"
+  },
+  "short_name": {
+    "message": "Gem Screener"
+  },
+  "description": {
+    "message": "Vylepšete svůj webový prohlížeč pomocí našeho všestranného nástroje. Otevírejte webové stránky v postranním panelu nebo vyskakovacím"
+  },
+  "toggle_minimize_desc": {
+    "message": "Přepnout zobrazení/skrytí okna Spolujezdce"
+  }
+}

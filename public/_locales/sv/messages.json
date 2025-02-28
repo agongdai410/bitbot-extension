@@ -1,0 +1,14 @@
+{
+  "name": {
+    "message": "Gem Screener: AI Multitasking Verktyg, Real Chatgpt sidofält, Chatdoc"
+  },
+  "short_name": {
+    "message": "Gem Screener"
+  },
+  "description": {
+    "message": "Förbättra din webbläsning med vårt mångsidiga verktyg. Öppna enkelt vilken webbplats som helst i en sidofält eller popup-fönster för"
+  },
+  "toggle_minimize_desc": {
+    "message": "Växla visa/dölj co-pilot-fönstret"
+  }
+}

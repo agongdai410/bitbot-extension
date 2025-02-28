@@ -1,0 +1,14 @@
+{
+  "name": {
+    "message": "Gem Screener: view price chart, realtime trading\nTrans"
+  },
+  "short_name": {
+    "message": "Gem Screener"
+  },
+  "description": {
+    "message": "Poboljšajte svoje pregledavanje weba s našim svestranim alatom. Otvorite bilo koju web stranicu u bočnoj traci ili iskačućem prozoru"
+  },
+  "toggle_minimize_desc": {
+    "message": "Preklopite prikaz/skrivanje okna Sovoznika"
+  }
+}

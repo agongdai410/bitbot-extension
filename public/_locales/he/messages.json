@@ -1,0 +1,14 @@
+{
+  "name": {
+    "message": "Gem Screener: view price chart, realtime trading\nTrans"
+  },
+  "short_name": {
+    "message": "Gem Screener"
+  },
+  "description": {
+    "message": "Enhance your web browsing with our versatile tool. Open any website in a sidebar or popup window for multitasking."
+  },
+  "toggle_minimize_desc": {
+    "message": "שינוי הצגה/הסתרה של חלון הגיבור המלכודת"
+  }
+}

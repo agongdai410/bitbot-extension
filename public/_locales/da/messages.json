@@ -1,0 +1,14 @@
+{
+  "name": {
+    "message": "Gem Screener: view price chart, realtime trading\nTrans"
+  },
+  "short_name": {
+    "message": "Gem Screener"
+  },
+  "description": {
+    "message": "Forbedre din webbrowsing med vores alsidige værktøj. Åbn nemt enhver hjemmeside i en sidebar eller pop-up vindue for problemfri mult"
+  },
+  "toggle_minimize_desc": {
+    "message": "Skift visning/skjul Copilot-vindue"
+  }
+}

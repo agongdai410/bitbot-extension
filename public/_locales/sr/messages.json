@@ -1,0 +1,14 @@
+{
+  "name": {
+    "message": "Gem Screener: AI Multitasking Alat, Real Chatgpt bočna traka, Chatdoc"
+  },
+  "short_name": {
+    "message": "Gem Screener"
+  },
+  "description": {
+    "message": "Unaprijedite svoje surfanje webom uz naš svestrani alat. Lako otvorite bilo koju stranicu u bočnoj traci ili iskačućem prozoru za be"
+  },
+  "toggle_minimize_desc": {
+    "message": "Prikaži/sakrij prozor kopilota"
+  }
+}

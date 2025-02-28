@@ -1,0 +1,14 @@
+{
+  "name": {
+    "message": "Gem Screener: AI Multitasking-Tool, Echte Chatgpt-Seitenleiste, Chatdoc"
+  },
+  "short_name": {
+    "message": "Gem Screener"
+  },
+  "description": {
+    "message": "Verbessern Sie Ihr Web-Browsing mit unserem vielseitigen Tool. Öffnen Sie mühelos jede Website in einer Seitenleiste oder Popup-Fens"
+  },
+  "toggle_minimize_desc": {
+    "message": "Copilot-Fenster anzeigen/ausblenden umschalten"
+  }
+}

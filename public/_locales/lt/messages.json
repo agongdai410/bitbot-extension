@@ -1,0 +1,14 @@
+{
+  "name": {
+    "message": "Gem Screener: AI Daugiafunkcinė įrankių juosta, Tikras Chatgpt šoninis"
+  },
+  "short_name": {
+    "message": "Gem Screener"
+  },
+  "description": {
+    "message": "Sustiprinkite savo interneto naršymą mūsų universaliniu įrankiu. Paprastai atidarykite bet kurią svetainę šoniniame juostoje ar iššo"
+  },
+  "toggle_minimize_desc": {
+    "message": "Perjungti rodyti/paslėpti kolegos langą"
+  }
+}

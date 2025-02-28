@@ -1,0 +1,14 @@
+{
+  "name": {
+    "message": "Gem Screener: view price chart, realtime trading\nTrans"
+  },
+  "short_name": {
+    "message": "Gem Screener"
+  },
+  "description": {
+    "message": "Enhance web browsing with our versatile tool. Open websites in sidebar or popup."
+  },
+  "toggle_minimize_desc": {
+    "message": "ಕೊಪಿಲೋಟ್ ವಿಂಡೋ ತೋರಿಸು/ಮರೆಮಾಡು ಟಾಗಲ್‌"
+  }
+}

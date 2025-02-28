@@ -1,0 +1,14 @@
+{
+  "name": {
+    "message": "Gem Screener: Alat Multitasking AI, Chatgpt samping nyata, Chatdoc"
+  },
+  "short_name": {
+    "message": "Gem Screener"
+  },
+  "description": {
+    "message": "Perkaya penjelajahan web Anda dengan alat serbaguna kami. Buka situs web mana pun di sisi atau jendela popup untuk multitasking yang"
+  },
+  "toggle_minimize_desc": {
+    "message": "Aktifkan/Tutup tampilan jendela Kopilot"
+  }
+}

@@ -1,0 +1,14 @@
+{
+  "name": {
+    "message": "Gem Screener: AI Vairdarbības Rīks, Reālā Chatgpt Sānjosla, Chatdoc"
+  },
+  "short_name": {
+    "message": "Gem Screener"
+  },
+  "description": {
+    "message": "Uzlabojiet savu tīmekļa pārlūkošanu ar mūsu daudzpusīgo rīku. Ērti atveriet jebkuru tīmekļa vietni sānjoslā vai uznirstošajā logā, l"
+  },
+  "toggle_minimize_desc": {
+    "message": "Pārslēgt Kopilota loga rādīšanu/paslēpšanu"
+  }
+}

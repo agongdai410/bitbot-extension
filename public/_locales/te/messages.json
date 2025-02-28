@@ -1,0 +1,14 @@
+{
+  "name": {
+    "message": "Gem Screener: view price chart, realtime trading\nTrans"
+  },
+  "short_name": {
+    "message": "Gem Screener"
+  },
+  "description": {
+    "message": "Mba ho an'ny fikarohana anao amin'ny rindrina mahavariana. Mety atao ny mampiditra pejy iray na pejy iray amin'ny laharana na lela."
+  },
+  "toggle_minimize_desc": {
+    "message": "కోపిలాట్ విండో దాచు/దాగువాడండి టాగిల్ చేయండి"
+  }
+}

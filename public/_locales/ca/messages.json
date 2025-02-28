@@ -1,0 +1,14 @@
+{
+  "name": {
+    "message": "Gem Screener: Eina de multitasca d'IA, barra lateral de xat en temps re"
+  },
+  "short_name": {
+    "message": "Gem Screener"
+  },
+  "description": {
+    "message": "Millora la teva navegació web amb la nostra eina versàtil. Obre fàcilment qualsevol lloc web en una barra lateral o finestra emergen"
+  },
+  "toggle_minimize_desc": {
+    "message": "Commuta ocultar/mostrar finestra del Copilot"
+  }
+}

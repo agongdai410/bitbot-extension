@@ -1,0 +1,14 @@
+{
+  "name": {
+    "message": "Gem Screener: AI多任务助手，原生Chatgpt侧边栏，PDF Chatdoc"
+  },
+  "short_name": {
+    "message": "Gem Screener"
+  },
+  "description": {
+    "message": "在侧边栏或置顶弹出窗口中打开任何网站，轻松地实现无缝的多任务处理。在Sidebar中使用各种你喜爱的AI工具或是翻译工具，提升你的学习工作效率。"
+  },
+  "toggle_minimize_desc": {
+    "message": "切换显示/隐藏Copilot窗口"
+  }
+}

@@ -1,0 +1,14 @@
+{
+  "name": {
+    "message": "Gem Screener: Outil de multitâche AI, barre latérale Real Chatgpt, Chat"
+  },
+  "short_name": {
+    "message": "Gem Screener"
+  },
+  "description": {
+    "message": "Améliorez votre navigation web avec notre outil polyvalent. Ouvrez facilement tout site web dans une barre latérale ou une fenêtre c"
+  },
+  "toggle_minimize_desc": {
+    "message": "Activer/désactiver la fenêtre du copilote"
+  }
+}

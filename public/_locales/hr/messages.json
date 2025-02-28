@@ -1,0 +1,14 @@
+{
+  "name": {
+    "message": "Gem Screener: AI Alat za istovremeno obavljanje više zadataka, Real Cha"
+  },
+  "short_name": {
+    "message": "Gem Screener"
+  },
+  "description": {
+    "message": "Poboljšajte svoje pretraživanje weba s našim svestranim alatom. Otvorite bilo koju web stranicu u bočnoj traci ili skočnom prozoru z"
+  },
+  "toggle_minimize_desc": {
+    "message": "Uključivanje/isključivanje prikaza suvozačevog prozora"
+  }
+}
