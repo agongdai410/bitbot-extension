@@ -1,269 +1,316 @@
 // Wait for DOM to be fully loaded before accessing any elements
-document.addEventListener('DOMContentLoaded', function() {
-  // Store references to DOM elements
-  const urlInput = document.getElementById('urlInput');
-  const goBtn = document.getElementById('goBtn');
-  const clearBtn = document.getElementById('clearBtn');
-  const refreshBtn = document.getElementById('refreshBtn');
-  const contentFrame = document.getElementById('contentFrame');
-  const loadingIndicator = document.getElementById('loadingIndicator');
-  const errorMessage = document.getElementById('errorMessage');
+document.addEventListener('DOMContentLoaded', () => {
+  // Get DOM elements
+  const addressBar = document.getElementById('url-input');
+  const loadButton = document.getElementById('load-button');
+  const viewFrame = document.getElementById('view-frame');
+  const loadingIndicator = document.getElementById('loading-indicator');
+  const errorMessage = document.getElementById('error-message');
+  const toggleMobileButton = document.getElementById('toggle-mobile');
+  const clearButton = document.getElementById('clear-button');
+  const refreshButton = document.getElementById('refresh-button');
+  const viewModeIndicator = document.getElementById('view-mode');
   
-  // Keep track of frame loading state
-  let loadTimeout = null;
-  let currentURL = '';
+  // State variables
+  let swRegistration = null;
+  let isMobileView = false;
+  let currentUrl = '';
   
-  // Initialize serviceWorker communication - make sure to use the correct path
-  if (navigator.serviceWorker) {
-    navigator.serviceWorker.getRegistration()
-      .then(registration => {
-        if (registration) {
-          console.log('Service worker already registered with scope:', registration.scope);
+  // Initialize the service worker
+  async function initServiceWorker() {
+    if ('serviceWorker' in navigator) {
+      try {
+        // Check for existing service worker registration first
+        swRegistration = await navigator.serviceWorker.getRegistration();
+        
+        if (!swRegistration) {
+          console.log('No active service worker found, registering new one');
+          swRegistration = await navigator.serviceWorker.register('./fetch_service_worker.js');
+          console.log('Service Worker registered successfully:', swRegistration.scope);
         } else {
-          console.log('No service worker registration found, trying to register');
-          // Use relative path instead of absolute
-          return navigator.serviceWorker.register('./fetch_service_worker.js')
-            .then(reg => {
-              console.log('Service worker registered with scope:', reg.scope);
-            });
+          console.log('Using existing service worker registration:', swRegistration.scope);
         }
-      })
-      .catch(error => {
-        console.error('Service worker registration error:', error);
-      });
-  } else {
-    console.error('Service workers not supported in this browser');
+        
+        // Ensure the service worker is activated
+        if (swRegistration.installing) {
+          console.log('Service worker installing...');
+          // Wait for the service worker to be ready
+          const worker = swRegistration.installing;
+          worker.addEventListener('statechange', () => {
+            if (worker.state === 'activated') {
+              console.log('Service worker is now activated');
+            }
+          });
+        } else if (swRegistration.waiting) {
+          console.log('Service worker installed, waiting to activate...');
+          // Force activation if needed
+          swRegistration.waiting.postMessage({type: 'SKIP_WAITING'});
+        } else if (swRegistration.active) {
+          console.log('Service worker active');
+        }
+        
+        // Listen for messages from the service worker
+        navigator.serviceWorker.addEventListener('message', (event) => {
+          console.log('Message from service worker:', event.data);
+          
+          if (event.data.type === 'x-handling-info') {
+            showNotification(event.data.message);
+          } else if (event.data.type === 'page-load-status') {
+            handlePageLoadStatus(event.data);
+          }
+        });
+        
+      } catch (error) {
+        console.error('Service Worker registration failed:', error);
+        showError('Service worker registration failed. Some features may not work correctly.');
+      }
+    } else {
+      console.error('Service Workers are not supported in this browser.');
+      showError('Service Workers are not supported in this browser. The extension may not work correctly.');
+    }
+  }
+  
+  // Function to load a URL in the iframe
+  function loadUrl(url) {
+    if (!url) {
+      showError('Please enter a URL');
+      return;
+    }
+    
+    // Ensure URL has protocol
+    if (!/^https?:\/\//i.test(url)) {
+      url = 'https://' + url;
+      addressBar.value = url;
+    }
+    
+    // Store current URL
+    currentUrl = url;
+    
+    // Show loading indicator
+    showLoading(true);
+    hideError();
+    
+    try {
+      // Inform service worker that we're loading a page
+      if (swRegistration && swRegistration.active) {
+        swRegistration.active.postMessage({
+          type: 'loading-page',
+          url: url,
+          isMobile: isMobileView
+        });
+      }
+      
+      // Special handling for certain URLs
+      const urlObj = new URL(url);
+      if (urlObj.hostname === 'x.com' || urlObj.hostname === 'www.x.com') {
+        showNotification('Loading X.com in enhanced mode...');
+      }
+      
+      // Set the iframe src to load the page
+      viewFrame.src = url;
+      
+      // Update clear button visibility
+      if (clearButton) {
+        clearButton.style.display = 'flex';
+      }
+      
+      // Set up a timeout for loading
+      const loadTimeout = setTimeout(() => {
+        showLoading(false);
+        showError('Loading timed out. The page may be blocked from displaying in iframes.');
+      }, 30000); // 30 second timeout
+      
+      // Handle iframe load event
+      viewFrame.onload = () => {
+        clearTimeout(loadTimeout);
+        showLoading(false);
+        
+        // Inform service worker that page loaded successfully
+        if (swRegistration && swRegistration.active) {
+          swRegistration.active.postMessage({
+            type: 'page-loaded',
+            success: true,
+            url: url,
+            isMobile: isMobileView
+          });
+        }
+      };
+      
+      // Handle iframe error event
+      viewFrame.onerror = (error) => {
+        clearTimeout(loadTimeout);
+        showLoading(false);
+        showError('Failed to load the page: ' + error.message);
+        
+        // Inform service worker that page load failed
+        if (swRegistration && swRegistration.active) {
+          swRegistration.active.postMessage({
+            type: 'page-loaded',
+            success: false,
+            url: url,
+            error: error.message,
+            isMobile: isMobileView
+          });
+        }
+      };
+    } catch (error) {
+      showLoading(false);
+      showError('Invalid URL or loading error: ' + error.message);
+    }
   }
   
   // Show/hide loading indicator
-  function showLoading(show = true) {
+  function showLoading(show) {
     if (loadingIndicator) {
-      loadingIndicator.classList.toggle('hidden', !show);
+      loadingIndicator.style.display = show ? 'block' : 'none';
+    }
+    if (viewFrame) {
+      viewFrame.style.opacity = show ? '0.3' : '1';
     }
   }
   
   // Show error message
-  function showError(message = '') {
+  function showError(message) {
     if (errorMessage) {
       errorMessage.textContent = message;
-      errorMessage.classList.toggle('hidden', !message);
+      errorMessage.style.display = 'block';
     }
   }
   
-  // Helper function to load URL
-  function loadUrl(url) {
-    if (!url) return;
-    
-    // Reset error message
-    showError();
-    
-    // Add 'https://' if protocol is missing
-    if (!url.startsWith('http://') && !url.startsWith('https://')) {
-      url = 'https://' + url;
-      if (urlInput) urlInput.value = url;
-    }
-    
-    // Store current URL
-    currentURL = url;
-    
-    // Add cache busting for URLs
-    const cacheBuster = Date.now();
-    const urlWithCache = url + (url.includes('?') ? '&' : '?') + '_t=' + cacheBuster;
-    
-    // Set up timeout for loading 
-    if (loadTimeout) {
-      clearTimeout(loadTimeout);
-    }
-    
-    loadTimeout = setTimeout(() => {
-      if (contentFrame.src === urlWithCache) {
-        showLoading(false);
-        showError('Loading is taking longer than expected. The site might be blocked or unavailable.');
-      }
-    }, 20000); // 20 second timeout
-    
-    // Show loading indicator
-    showLoading(true);
-    
-    // Load the URL in the iframe
-    if (contentFrame) {
-      contentFrame.src = urlWithCache;
-      console.log('Loading URL:', urlWithCache);
-      
-      // Notify the service worker that we're loading a page
-      if (navigator.serviceWorker.controller) {
-        navigator.serviceWorker.controller.postMessage({
-          type: 'loading-page',
-          url: url
-        });
-      } else {
-        console.warn('Service worker not controlling this page yet, cannot send message');
-      }
-    } else {
-      console.error('Content frame not found! Make sure you have an iframe with id="contentFrame"');
-      showLoading(false);
-      showError('Content frame not found!');
+  // Hide error message
+  function hideError() {
+    if (errorMessage) {
+      errorMessage.style.display = 'none';
     }
   }
   
-  // Add event listeners if elements exist
-  if (urlInput) {
-    urlInput.addEventListener('keypress', (e) => {
-      if (e.key === 'Enter') {
-        loadUrl(urlInput.value);
+  // Show a temporary notification
+  function showNotification(message, duration = 5000) {
+    // Create notification element if it doesn't exist
+    let notification = document.getElementById('notification');
+    if (!notification) {
+      notification = document.createElement('div');
+      notification.id = 'notification';
+      notification.style.position = 'fixed';
+      notification.style.bottom = '20px';
+      notification.style.left = '50%';
+      notification.style.transform = 'translateX(-50%)';
+      notification.style.backgroundColor = '#333';
+      notification.style.color = 'white';
+      notification.style.padding = '10px 20px';
+      notification.style.borderRadius = '5px';
+      notification.style.zIndex = '1000';
+      notification.style.opacity = '0';
+      notification.style.transition = 'opacity 0.3s';
+      document.body.appendChild(notification);
+    }
+    
+    // Set message and show
+    notification.textContent = message;
+    notification.style.opacity = '1';
+    
+    // Hide after duration
+    setTimeout(() => {
+      notification.style.opacity = '0';
+    }, duration);
+  }
+
+  // Handle page load status messages from service worker
+  function handlePageLoadStatus(data) {
+    if (!data.success && data.error) {
+      showError(`Load error: ${data.error}`);
+    }
+  }
+
+  // Toggle mobile view
+  function toggleMobileView() {
+    isMobileView = !isMobileView;
+    if (toggleMobileButton) {
+      toggleMobileButton.textContent = isMobileView ? '🖥️ Desktop View' : '📱 Mobile View';
+    }
+    
+    // Update view mode indicator
+    if (viewModeIndicator) {
+      viewModeIndicator.textContent = isMobileView ? 'Mobile' : 'Desktop';
+    }
+    
+    showNotification(`Switched to ${isMobileView ? 'mobile' : 'desktop'} view. Reload the page to apply.`);
+  }
+  
+  // Function to clear the address bar
+  function clearAddressBar() {
+    if (addressBar) {
+      addressBar.value = '';
+      addressBar.focus();
+      if (clearButton) {
+        clearButton.style.display = 'none';
+      }
+    }
+  }
+  
+  // Function to refresh the current page
+  function refreshPage() {
+    if (currentUrl) {
+      loadUrl(currentUrl);
+    } else if (addressBar && addressBar.value) {
+      loadUrl(addressBar.value);
+    }
+  }
+  
+  // Set up event listeners
+  if (loadButton) {
+    loadButton.addEventListener('click', () => {
+      loadUrl(addressBar.value);
+    });
+  }
+  
+  if (addressBar) {
+    addressBar.addEventListener('keypress', (event) => {
+      if (event.key === 'Enter') {
+        loadUrl(addressBar.value);
       }
     });
     
-    urlInput.addEventListener('input', () => {
-      if (clearBtn) {
-        clearBtn.style.display = urlInput.value ? 'flex' : 'none';
-      }
-    });
-    
-    // Focus input field when the page loads
-    urlInput.focus();
-  } else {
-    console.error('URL input element not found! Make sure you have an element with id="urlInput"');
-  }
-  
-  if (goBtn) {
-    goBtn.addEventListener('click', () => {
-      if (urlInput) {
-        loadUrl(urlInput.value);
-      }
-    });
-  } else {
-    console.error('Go button element not found! Make sure you have an element with id="goBtn"');
-  }
-  
-  if (refreshBtn) {
-    refreshBtn.addEventListener('click', () => {
-      if (contentFrame && contentFrame.src) {
-        loadUrl(contentFrame.src.split('?_t=')[0]); // Remove cache buster when refreshing
-      } else if (urlInput && urlInput.value) {
-        loadUrl(urlInput.value);
-      }
-    });
-  }
-  
-  if (clearBtn) {
-    clearBtn.addEventListener('click', () => {
-      if (urlInput) {
-        urlInput.value = '';
-        urlInput.focus();
-        clearBtn.style.display = 'none';
+    // Show/hide clear button based on input
+    addressBar.addEventListener('input', () => {
+      if (clearButton) {
+        clearButton.style.display = addressBar.value ? 'flex' : 'none';
       }
     });
     
     // Initialize clear button visibility
-    if (urlInput) {
-      clearBtn.style.display = urlInput.value ? 'flex' : 'none';
+    if (clearButton && addressBar.value) {
+      clearButton.style.display = 'flex';
+    } else if (clearButton) {
+      clearButton.style.display = 'none';
     }
-  } else {
-    console.error('Clear button element not found! Make sure you have an element with id="clearBtn"');
   }
   
-  // Handle iframe load events
-  if (contentFrame) {
-    contentFrame.addEventListener('load', () => {
-      // Clear the timeout
-      if (loadTimeout) {
-        clearTimeout(loadTimeout);
-        loadTimeout = null;
-      }
-      
-      // Hide loading indicator when the content is loaded
-      showLoading(false);
-      
-      try {
-        // Try to check if there was an error loading the page
-        const frameUrl = contentFrame.src;
-        
-        // Try to access the contentDocument to see if we can interact with the page
-        const frameWindow = contentFrame.contentWindow;
-        const frameDocument = contentFrame.contentDocument || (frameWindow ? frameWindow.document : null);
-        
-        // If we can access the content, check if it's an error page
-        if (frameDocument && frameDocument.title) {
-          if (frameDocument.title.includes('refused to connect') || 
-              frameDocument.title.includes('Error') || 
-              frameDocument.title.includes('not available')) {
-            showError('Error loading content: ' + frameDocument.title);
-          } else {
-            // Update the urlInput with the final URL after redirects
-            if (urlInput && frameWindow && frameWindow.location && frameWindow.location.href) {
-              let finalUrl = frameWindow.location.href.split('?_t=')[0]; // Remove cache buster
-              if (finalUrl !== currentURL) {
-                urlInput.value = finalUrl;
-                currentURL = finalUrl;
-              }
-            }
-            
-            // Notify the service worker that the page was loaded successfully
-            if (navigator.serviceWorker.controller) {
-              navigator.serviceWorker.controller.postMessage({
-                type: 'page-loaded',
-                url: currentURL,
-                success: true
-              });
-            }
-          }
-        }
-        
-        console.log('Frame loaded:', frameUrl);
-      } catch (error) {
-        // We can't access the content due to CORS - this is actually expected and OK
-        console.log('Frame loaded, but content not accessible due to CORS (this is normal)');
-        
-        // Notify the service worker of successful load
-        if (navigator.serviceWorker.controller) {
-          navigator.serviceWorker.controller.postMessage({
-            type: 'page-loaded',
-            url: currentURL,
-            success: true
-          });
-        }
-      }
-    });
-    
-    contentFrame.addEventListener('error', (error) => {
-      console.error('Frame error:', error);
-      showLoading(false);
-      showError('Failed to load content. Please try again.');
-      
-      // Notify the service worker of error
-      if (navigator.serviceWorker.controller) {
-        navigator.serviceWorker.controller.postMessage({
-          type: 'page-loaded',
-          url: currentURL,
-          success: false,
-          error: error.message || 'Unknown error'
-        });
-      }
-    });
+  if (toggleMobileButton) {
+    toggleMobileButton.addEventListener('click', toggleMobileView);
   }
   
-  // Add a message handler to receive messages from the service worker
-  navigator.serviceWorker.addEventListener('message', (event) => {
-    console.log('Received message from service worker:', event.data);
-    
-    if (event.data && event.data.type === 'page-load-status') {
-      if (event.data.success) {
-        showError('');
-      } else {
-        showLoading(false);
-        showError(event.data.error || 'Error loading page');
-      }
-    } else if (event.data && event.data.type === 'content-error') {
-      showLoading(false);
-      showError(event.data.error || 'Error loading content');
-    }
-  });
+  if (clearButton) {
+    clearButton.addEventListener('click', clearAddressBar);
+  }
   
-  // Set up a default URL (Optional - can start with Twitter)
-  // Uncomment this line if you want to automatically load Twitter when the panel opens
-  // setTimeout(() => loadUrl('https://twitter.com'), 1000);
+  if (refreshButton) {
+    refreshButton.addEventListener('click', refreshPage);
+  }
   
-  // Debug message to confirm script loaded
-  console.log('Panel script initialized successfully');
+  // Initialize on load
+  initServiceWorker();
+  
+  // Focus address bar by default
+  if (addressBar) {
+    addressBar.focus();
+  }
+  
+  // Pre-load default URL if present in address bar
+  if (addressBar && addressBar.value) {
+    loadUrl(addressBar.value);
+  }
+  
+  // Debug message to confirm panel script initialized
+  console.log('Panel script initialized');
 }); 

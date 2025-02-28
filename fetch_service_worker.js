@@ -18,24 +18,38 @@ const YOUTUBE_DOMAINS = [
   'yt3.googleusercontent.com'
 ];
 
-// Headers to add to outgoing requests (ensures sites see us as a regular browser)
+// Constants
+const CACHE_NAME = 'bitbot-extension-cache-v1';
+const CACHE_DURATION = 60 * 60 * 1000; // 1 hour in milliseconds
+
+// Browser user agents
+const MOBILE_USER_AGENT = 'Mozilla/5.0 (iPhone; CPU iPhone OS 15_0 like Mac OS X) AppleWebKit/605.1.15 (KHTML, like Gecko) Version/15.0 Mobile/15E148 Safari/604.1';
+const DESKTOP_USER_AGENT = 'Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/91.0.4472.114 Safari/537.36';
+
+// Enhanced request headers that mimic a regular browser
 const ENHANCED_REQUEST_HEADERS = {
-  'User-Agent': 'Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/116.0.0.0 Safari/537.36',
-  'Accept': 'text/html,application/xhtml+xml,application/xml;q=0.9,image/avif,image/webp,image/apng,*/*;q=0.8',
+  'User-Agent': MOBILE_USER_AGENT,
+  'Accept': 'text/html,application/xhtml+xml,application/xml;q=0.9,image/webp,image/apng,*/*;q=0.8',
   'Accept-Language': 'en-US,en;q=0.9',
+  'Accept-Encoding': 'gzip, deflate, br',
+  'Upgrade-Insecure-Requests': '1',
   'Sec-Fetch-Dest': 'document',
   'Sec-Fetch-Mode': 'navigate',
   'Sec-Fetch-Site': 'none',
   'Sec-Fetch-User': '?1',
-  'Upgrade-Insecure-Requests': '1'
+  'Sec-CH-UA': '"Google Chrome";v="113", "Chromium";v="113"',
+  'Sec-CH-UA-Mobile': '?1',
+  'Sec-CH-UA-Platform': '"Android"'
 };
 
-// Additional request headers for Twitter API
+// Additional request headers for Twitter API - updated for mobile
 const TWITTER_API_HEADERS = {
   'authorization': 'Bearer AAAAAAAAAAAAAAAAAAAAANRILgAAAAAAnNwIzUejRCOuH5E6I8xnZz4puTs%3D1Zv7ttfk8LF81IUq16cHjhLTvJu4FA33AGWWjCpTnA',
   'x-twitter-client-language': 'en',
   'x-twitter-active-user': 'yes',
-  'Origin': 'https://twitter.com'
+  'Origin': 'https://twitter.com',
+  'x-twitter-client': 'mobileweb',
+  'x-twitter-client-version': 'rweb-mobile'
 };
 
 // Headers to remove from responses to allow framing
@@ -55,21 +69,19 @@ let guestToken = '';
 let csrfToken = '';
 let attemptedGuestToken = false;
 
-// Caching strategy
-const CACHE_NAME = 'web-viewer-cache-v1';
-const CACHE_DURATION = 5 * 60 * 1000; // 5 minutes
-
 // Register this service worker
-self.addEventListener('install', event => {
-  console.log('Web Viewer Service Worker installed');
+self.addEventListener('install', (event) => {
+  console.log('Service Worker installing');
+  // Skip waiting to activate immediately
   self.skipWaiting();
   
   // Initialize the declarativeNetRequest rules
   event.waitUntil(initializeHeaderModificationRules());
 });
 
-self.addEventListener('activate', event => {
-  console.log('Web Viewer Service Worker activated');
+self.addEventListener('activate', (event) => {
+  console.log('Service Worker activated');
+  // Claim clients so the service worker starts controlling current pages
   event.waitUntil(clients.claim());
   
   // Try to get a guest token immediately so it's ready when needed
@@ -93,21 +105,50 @@ self.addEventListener('activate', event => {
 self.addEventListener('message', async (event) => {
   console.log('Service worker received message:', event.data);
   
+  // Handle SKIP_WAITING message for immediate activation
+  if (event.data && event.data.type === 'SKIP_WAITING') {
+    console.log('Skip waiting and activate immediately');
+    self.skipWaiting();
+    return;
+  }
+  
   // Handle messages from panel.js
   if (event.data && event.data.type === 'loading-page') {
     // The panel is loading a page - perform any setup needed
     console.log('Panel is loading URL:', event.data.url);
+    const isMobile = event.data.isMobile === true;
     
-    // If it's Twitter/X, make sure we have a guest token
-    const url = new URL(event.data.url);
-    if (url.hostname === 'twitter.com' || url.hostname === 'x.com') {
-      if (!guestToken) {
-        await getGuestToken();
+    // Parse the URL to determine what setup might be needed
+    try {
+      const url = new URL(event.data.url);
+      
+      // If it's Twitter/X, make sure we have a guest token
+      if (url.hostname === 'twitter.com' || url.hostname === 'x.com' || 
+          url.hostname === 'mobile.twitter.com' || url.hostname === 'mobile.x.com') {
+        if (!guestToken) {
+          await getGuestToken();
+        }
+        
+        // For x.com, prepare for special handling
+        if (url.hostname === 'x.com' || url.hostname === 'www.x.com') {
+          console.log('X.com URL detected, will use wrapper approach');
+          
+          // If there's a client to respond to, let it know
+          if (event.source) {
+            event.source.postMessage({
+              type: 'x-handling-info',
+              message: 'Using wrapper approach for x.com'
+            });
+          }
+        }
       }
+    } catch (error) {
+      console.error('Error processing loading-page message:', error);
     }
   } else if (event.data && event.data.type === 'page-loaded') {
     // The panel reports a page was loaded (or failed)
     console.log('Panel reports page loaded:', event.data.success ? 'success' : 'failed');
+    const isMobile = event.data.isMobile === true;
     
     // If the client needs a response, send one
     if (event.source) {
@@ -115,7 +156,8 @@ self.addEventListener('message', async (event) => {
         type: 'page-load-status',
         success: event.data.success,
         url: event.data.url,
-        error: event.data.error || null
+        error: event.data.error || null,
+        isMobile: isMobile
       });
     }
   }
@@ -126,15 +168,46 @@ async function initializeHeaderModificationRules() {
   try {
     // Remove any existing rules first
     await chrome.declarativeNetRequest.updateSessionRules({
-      removeRuleIds: [1, 2, 3]
+      removeRuleIds: [1, 2, 3, 4, 5]
     });
     
     // Add rule for all websites - remove X-Frame-Options and CSP
     await chrome.declarativeNetRequest.updateSessionRules({
       addRules: [
+        // Rule specifically for X.com and Twitter - highest priority
         {
           id: 1,
-          priority: 100, // Higher priority
+          priority: 1000, // Extremely high priority specifically for Twitter/X
+          action: {
+            type: chrome.declarativeNetRequest.RuleActionType.MODIFY_HEADERS,
+            responseHeaders: [
+              {
+                header: "X-Frame-Options",
+                operation: chrome.declarativeNetRequest.HeaderOperation.REMOVE,
+              },
+              {
+                header: "Content-Security-Policy",
+                operation: chrome.declarativeNetRequest.HeaderOperation.REMOVE,
+              },
+              {
+                header: "Frame-Options",
+                operation: chrome.declarativeNetRequest.HeaderOperation.REMOVE,
+              }
+            ]
+          },
+          condition: {
+            domains: ['twitter.com', 'x.com', 'mobile.twitter.com', 'mobile.x.com', 'api.twitter.com', 'api.x.com'],
+            resourceTypes: [
+              chrome.declarativeNetRequest.ResourceType.MAIN_FRAME,
+              chrome.declarativeNetRequest.ResourceType.SUB_FRAME,
+              chrome.declarativeNetRequest.ResourceType.XMLHTTPREQUEST
+            ]
+          }
+        },
+        // Rule for X-Frame-Options for general sites
+        {
+          id: 2,
+          priority: 100, 
           action: {
             type: chrome.declarativeNetRequest.RuleActionType.MODIFY_HEADERS,
             responseHeaders: [
@@ -152,9 +225,10 @@ async function initializeHeaderModificationRules() {
             ]
           }
         },
+        // Rule for other security headers for general sites
         {
-          id: 2,
-          priority: 100, // Higher priority
+          id: 3,
+          priority: 100,
           action: {
             type: chrome.declarativeNetRequest.RuleActionType.MODIFY_HEADERS,
             responseHeaders: [
@@ -193,10 +267,10 @@ async function initializeHeaderModificationRules() {
             ]
           }
         },
-        // Add UA rule for Twitter/YouTube specifically
+        // Mobile UA rule for Twitter/X domains with maximum priority
         {
-          id: 3,
-          priority: 200, // Even higher priority for specific domains
+          id: 4,
+          priority: 1000, // Extremely high priority for Twitter
           action: {
             type: chrome.declarativeNetRequest.RuleActionType.MODIFY_HEADERS,
             requestHeaders: [
@@ -209,11 +283,72 @@ async function initializeHeaderModificationRules() {
                 header: "Sec-Fetch-Dest",
                 operation: chrome.declarativeNetRequest.HeaderOperation.SET,
                 value: "document"
+              },
+              {
+                header: "viewport-width",
+                operation: chrome.declarativeNetRequest.HeaderOperation.SET,
+                value: "375"
+              },
+              {
+                header: "width", 
+                operation: chrome.declarativeNetRequest.HeaderOperation.SET,
+                value: "375"
+              },
+              {
+                header: "dpr",
+                operation: chrome.declarativeNetRequest.HeaderOperation.SET,
+                value: "2"
               }
             ]
           },
           condition: {
-            domains: [...TWITTER_DOMAINS, ...YOUTUBE_DOMAINS],
+            domains: ['twitter.com', 'x.com', 'mobile.twitter.com', 'mobile.x.com', 'api.twitter.com', 'api.x.com'],
+            resourceTypes: [
+              chrome.declarativeNetRequest.ResourceType.MAIN_FRAME,
+              chrome.declarativeNetRequest.ResourceType.SUB_FRAME,
+              chrome.declarativeNetRequest.ResourceType.XMLHTTPREQUEST,
+              chrome.declarativeNetRequest.ResourceType.IMAGE,
+              chrome.declarativeNetRequest.ResourceType.SCRIPT,
+              chrome.declarativeNetRequest.ResourceType.STYLESHEET
+            ]
+          }
+        },
+        // Mobile UA rule for all other domains
+        {
+          id: 5,
+          priority: 200,
+          action: {
+            type: chrome.declarativeNetRequest.RuleActionType.MODIFY_HEADERS,
+            requestHeaders: [
+              {
+                header: "User-Agent",
+                operation: chrome.declarativeNetRequest.HeaderOperation.SET,
+                value: ENHANCED_REQUEST_HEADERS["User-Agent"]
+              },
+              {
+                header: "Sec-Fetch-Dest",
+                operation: chrome.declarativeNetRequest.HeaderOperation.SET,
+                value: "document"
+              },
+              {
+                header: "viewport-width",
+                operation: chrome.declarativeNetRequest.HeaderOperation.SET,
+                value: "375"
+              },
+              {
+                header: "width", 
+                operation: chrome.declarativeNetRequest.HeaderOperation.SET,
+                value: "375"
+              },
+              {
+                header: "dpr",
+                operation: chrome.declarativeNetRequest.HeaderOperation.SET,
+                value: "2"
+              }
+            ]
+          },
+          condition: {
+            urlFilter: "*",
             resourceTypes: [
               chrome.declarativeNetRequest.ResourceType.MAIN_FRAME,
               chrome.declarativeNetRequest.ResourceType.SUB_FRAME,
@@ -227,64 +362,183 @@ async function initializeHeaderModificationRules() {
       ]
     });
     
-    console.log('Successfully set up declarativeNetRequest rules for header modification');
+    console.log('Successfully set up declarativeNetRequest rules for header modification (mobile)');
   } catch (error) {
     console.error('Failed to set up declarativeNetRequest rules:', error);
   }
 }
 
+// Function to convert URL to mobile version if needed
+function convertToMobileUrl(url, forceConvert = false) {
+  if (!url) return url;
+  
+  try {
+    const parsedUrl = new URL(url);
+    
+    // Only convert if mobile flag is set or forced
+    if (forceConvert) {
+      // Handle common domains
+      if (parsedUrl.hostname === 'twitter.com') {
+        parsedUrl.hostname = 'mobile.twitter.com';
+      } else if (parsedUrl.hostname === 'x.com') {
+        parsedUrl.hostname = 'mobile.x.com';
+      } else if (parsedUrl.hostname === 'www.youtube.com' || parsedUrl.hostname === 'youtube.com') {
+        parsedUrl.hostname = 'm.youtube.com';
+      } else if (parsedUrl.hostname === 'www.reddit.com' || parsedUrl.hostname === 'reddit.com') {
+        parsedUrl.hostname = 'old.reddit.com'; // Old reddit is more iframe-friendly
+      } else if (parsedUrl.hostname === 'www.wikipedia.org') {
+        parsedUrl.hostname = 'en.m.wikipedia.org';
+      } else if (parsedUrl.hostname.endsWith('.wikipedia.org') && !parsedUrl.hostname.includes('.m.')) {
+        // Convert all wikipedia domains to mobile
+        parsedUrl.hostname = parsedUrl.hostname.replace('.wikipedia.org', '.m.wikipedia.org');
+      } else if (parsedUrl.hostname === 'www.facebook.com') {
+        parsedUrl.hostname = 'm.facebook.com';
+      } else if (parsedUrl.hostname === 'www.instagram.com' || parsedUrl.hostname === 'instagram.com') {
+        // Instagram auto-detects from UA
+        parsedUrl.hostname = 'www.instagram.com';
+      }
+    }
+    
+    return parsedUrl.toString();
+  } catch (e) {
+    console.error('Error converting to mobile URL:', e);
+    return url;
+  }
+}
+
 // Listen for fetch events
 self.addEventListener('fetch', event => {
-  const url = new URL(event.request.url);
+  // Get URL from event
+  const url = event.request.url;
   
-  // For Twitter/X domains, we want to be especially careful about interception
-  const isTwitterDomain = TWITTER_DOMAINS.some(domain => url.hostname.includes(domain));
-  const isMainTwitterPage = url.hostname === 'twitter.com' || url.hostname === 'x.com';
+  // Skip non-HTTP(S) requests
+  if (!url.startsWith('http')) {
+    return;
+  }
   
-  // Always use respondWith to handle all fetch events
-  event.respondWith(
-    (async function() {
-      try {
-        // For main Twitter/X pages, bypass cache to ensure we get the freshest response
-        if (!isMainTwitterPage) {
-          // Check for cached responses first (except for Twitter API calls)
-          if (!url.hostname.includes('api.twitter.com') && !url.hostname.includes('api.x.com')) {
-            const cachedResponse = await getCachedResponse(event.request);
-            if (cachedResponse) {
-              console.log('Using cached response for:', url.href);
-              return cachedResponse;
-            }
-          }
-        }
-        
-        // Wait for any preloadResponse (could be used for navigation requests)
-        const preloadResponse = await event.preloadResponse;
-        if (preloadResponse) {
-          console.log('Using preload response for:', url.href);
-          // Even with declarativeNetRequest, we still need to process some responses
-          return await modifyResponseIfNeeded(preloadResponse.clone(), isTwitterDomain);
-        }
-        
-        // Based on domain, choose the appropriate handler
-        if (isTwitterDomain) {
-          console.log('Intercepting Twitter request:', url.href);
-          return handleTwitterRequest(event.request);
-        } else if (YOUTUBE_DOMAINS.some(domain => url.hostname.includes(domain))) {
-          console.log('Intercepting YouTube request:', url.href);
-          return handleYouTubeRequest(event.request);
-        } else {
-          // For all other domains, use the general handler
-          console.log('Intercepting general request:', url.href);
-          return handleGeneralRequest(event.request);
-        }
-      } catch (error) {
-        console.error('Error in fetch handler:', error);
-        // Fall back to original request
-        return fetch(event.request);
-      }
-    })()
-  );
+  // Handle the fetch with our custom logic
+  event.respondWith(handleFetchRequest(event, url));
 });
+
+async function handleFetchRequest(event, url) {
+  try {
+    // Get client ID for tracking state
+    const clientId = event.clientId;
+    
+    // Get isMobile preference if possible
+    let isMobile = false;
+    try {
+      if (clientId) {
+        const client = await clients.get(clientId);
+        if (client && typeof client.isMobile !== 'undefined') {
+          isMobile = client.isMobile === true;
+        }
+      }
+    } catch (e) {
+      console.log('Error getting client mobile preference:', e);
+    }
+    
+    // Check cache first
+    const cachedResponse = await caches.match(event.request);
+    if (cachedResponse) {
+      console.log('Serving from cache:', url);
+      return cachedResponse;
+    }
+    
+    // Parse the URL to decide how to handle it
+    const parsedUrl = new URL(url);
+    
+    // Check if this is Twitter/X
+    const isTwitter = parsedUrl.hostname === 'twitter.com' || 
+                      parsedUrl.hostname === 'x.com' || 
+                      parsedUrl.hostname === 'mobile.twitter.com' || 
+                      parsedUrl.hostname === 'mobile.x.com';
+                      
+    // Check if it's YouTube
+    const isYouTube = parsedUrl.hostname === 'youtube.com' || 
+                      parsedUrl.hostname === 'www.youtube.com' || 
+                      parsedUrl.hostname === 'm.youtube.com';
+    
+    // Apply appropriate handling based on domain
+    let requestUrl = url;
+    
+    if (isTwitter) {
+      // Check if it's a main page or profile page that might need special handling
+      const isMainPage = parsedUrl.pathname === '/' || parsedUrl.pathname === '';
+      const isProfilePage = /^\/[a-zA-Z0-9_]+\/?$/.test(parsedUrl.pathname);
+      const needsSpecialHandling = isMainPage || isProfilePage;
+      
+      // For Twitter, check if it needs the wrapper approach
+      if (needsSpecialHandling) {
+        // Force using a mobile URL for Twitter if mobile view is requested
+        requestUrl = isMobile ? convertToMobileUrl(url, true) : url;
+        
+        try {
+          // Quickly check if we can access the page directly
+          const headResponse = await fetch(requestUrl, { 
+            method: 'HEAD',
+            headers: { 'User-Agent': ENHANCED_REQUEST_HEADERS["User-Agent"] }
+          });
+          
+          // If we detect X-Frame-Options or the site refuses, use wrapper
+          if (!headResponse.ok || headResponse.headers.get('X-Frame-Options')) {
+            console.log('Twitter/X page not directly accessible, using wrapper');
+            return generateTwitterWrapperResponse(requestUrl);
+          }
+        } catch (error) {
+          console.log('Error checking Twitter/X page accessibility:', error);
+          return generateTwitterWrapperResponse(requestUrl);
+        }
+      } else {
+        // For other Twitter URLs, convert to mobile if needed
+        requestUrl = isMobile ? convertToMobileUrl(url, true) : url;
+      }
+    } else if (isYouTube) {
+      // For YouTube, convert to mobile format if requested
+      requestUrl = isMobile ? convertToMobileUrl(url, true) : url;
+    } else if (isMobile) {
+      // For all other domains, convert to mobile if mobile view is enabled
+      requestUrl = convertToMobileUrl(url, true);
+    }
+    
+    // Clone the request for modification
+    let request = new Request(requestUrl, {
+      headers: getModifiedHeaders(requestUrl, event.request.headers),
+      method: event.request.method,
+      body: event.request.body,
+      mode: 'cors',
+      credentials: event.request.credentials,
+      redirect: 'follow'
+    });
+    
+    // The rest of the fetch handler
+    console.log(`Fetching ${isMobile ? 'mobile' : 'desktop'} URL:`, requestUrl);
+    const response = await fetch(request);
+    
+    // Process the response
+    if (response.ok) {
+      // Modify response headers to allow framing
+      const newResponse = new Response(response.body, {
+        status: response.status,
+        statusText: response.statusText,
+        headers: modifyResponseHeaders(response.headers)
+      });
+      
+      // Cache the response if appropriate
+      if (shouldCacheResponse(requestUrl, response)) {
+        const cache = await caches.open(CACHE_NAME);
+        cache.put(event.request, newResponse.clone());
+      }
+      
+      return newResponse;
+    }
+    
+    return response;
+  } catch (error) {
+    console.error('Error in fetch handler:', error);
+    return new Response('Network error', { status: 500 });
+  }
+}
 
 // Modified response processor that relies more on declarativeNetRequest
 async function modifyResponseIfNeeded(response, isTwitterDomain) {
@@ -492,12 +746,20 @@ async function handleYouTubeRequest(request) {
     });
     
     // YouTube specific headers
-    modifiedRequest.headers.set('Referer', 'https://www.youtube.com/');
-    modifiedRequest.headers.set('Origin', 'https://www.youtube.com');
+    modifiedRequest.headers.set('Referer', 'https://m.youtube.com/');
+    modifiedRequest.headers.set('Origin', 'https://m.youtube.com');
+    modifiedRequest.headers.set('X-YouTube-Client-Name', '2'); // 2 = mobile web
+    modifiedRequest.headers.set('X-YouTube-Client-Version', '2.20230721.00.00');
     
     // Add cache busting for non-API requests
     if (request.method === 'GET' && !request.url.includes('/api/')) {
       const url = new URL(request.url);
+      
+      // Redirect to mobile YouTube if it's the main site
+      if (url.hostname === 'www.youtube.com' || url.hostname === 'youtube.com') {
+        url.hostname = 'm.youtube.com';
+      }
+      
       url.searchParams.set('_yt', Date.now());
       modifiedRequest = new Request(url.toString(), {
         method: modifiedRequest.method,
@@ -539,6 +801,12 @@ async function handleTwitterRequest(request) {
     // For main page and profile pages, we'll try both methods
     const needsSpecialHandling = isMainPage || isProfilePage;
     
+    // For x.com domain, always use the wrapper (more reliable)
+    if (url.hostname === 'x.com' || url.hostname === 'www.x.com') {
+      console.log('X.com detected - using wrapper approach directly');
+      return generateTwitterWrapperResponse(request.url);
+    }
+    
     // Clone the request to modify
     let modifiedRequest = new Request(request.url, {
       method: request.method,
@@ -552,6 +820,13 @@ async function handleTwitterRequest(request) {
     Object.entries(ENHANCED_REQUEST_HEADERS).forEach(([key, value]) => {
       modifiedRequest.headers.set(key, value);
     });
+    
+    // For Twitter, attempt to use mobile version explicitly
+    if (url.hostname === 'twitter.com') {
+      url.hostname = 'mobile.twitter.com';
+    } else if (url.hostname === 'x.com') {
+      url.hostname = 'mobile.x.com';
+    }
     
     // For Twitter API requests, add special authentication headers
     if (request.url.includes('api.twitter.com') || request.url.includes('api.x.com')) {
@@ -644,7 +919,7 @@ async function handleTwitterRequest(request) {
       }
     }
     
-    // Special handling for main Twitter page
+    // Special handling for main Twitter page - always prefer wrapper
     if (needsSpecialHandling) {
       // Try to get a guest token if we don't have one
       if (!guestToken && !attemptedGuestToken) {
@@ -652,26 +927,8 @@ async function handleTwitterRequest(request) {
         await getGuestToken();
       }
       
-      // For the main page, we use no-store to force a fresh request
-      modifiedRequest.headers.set('Cache-Control', 'no-store');
-      
-      // Try the alternative Twitter method - a wrapper HTML that loads Twitter in a special way
-      try {
-        // Just try fetching to check if we can access Twitter normally
-        const testResponse = await fetch(modifiedRequest, { method: 'HEAD' });
-        
-        // If we get a 200 OK, proceed normally
-        if (testResponse.ok) {
-          console.log('Twitter page accessible via normal fetch, proceeding with standard method');
-        } else {
-          // If we can't access Twitter normally, use the wrapper approach
-          console.log('Twitter page not accessible, using wrapper approach');
-          return generateTwitterWrapperResponse(request.url);
-        }
-      } catch (error) {
-        console.log('Error testing Twitter access, using wrapper approach:', error);
-        return generateTwitterWrapperResponse(request.url);
-      }
+      // Use the wrapper for twitter.com main pages as well - more consistent approach
+      return generateTwitterWrapperResponse(request.url);
     }
     
     // Add cache busting for non-API requests to avoid cached responses
@@ -690,39 +947,14 @@ async function handleTwitterRequest(request) {
     // Make the actual request
     let response = await fetch(modifiedRequest);
     
-    // If we got a 401 or 403 and don't have a guest token, try to get one and retry
-    if ((response.status === 401 || response.status === 403) && 
-        (request.url.includes('api.twitter.com') || request.url.includes('api.x.com'))) {
-      console.log('Got 401/403, trying to refresh guest token and retry');
-      await getGuestToken();
-      
-      // Retry the request with the new token
-      if (guestToken) {
-        modifiedRequest.headers.set('x-guest-token', guestToken);
-        response = await fetch(modifiedRequest);
-      }
-    }
-    
-    // For main Twitter page, check if we need to fall back to the wrapper method
-    if (needsSpecialHandling && (response.status === 403 || response.status === 401)) {
-      console.log('Twitter returned ' + response.status + ', using wrapper approach');
-      return generateTwitterWrapperResponse(request.url);
-    }
-    
-    // Extract tokens from response
+    // For Twitter-related resources, always extract tokens
     await extractTokensFromResponse(response.clone());
-    
-    // For main Twitter page, use aggressive header modification
-    if (needsSpecialHandling) {
-      const modifiedResponse = await aggressiveHeaderModification(response.clone());
-      return modifiedResponse;
-    }
     
     // For all other Twitter requests, just modify if needed
     const modifiedResponse = await modifyResponseIfNeeded(response.clone(), true);
     
-    // Cache the response for future use if not an API call and not the main page
-    if (!needsSpecialHandling && !request.url.includes('/api/') && !request.url.includes('graphql')) {
+    // Cache the response for future use if not an API call
+    if (!request.url.includes('/api/') && !request.url.includes('graphql')) {
       cacheResponse(request, modifiedResponse.clone());
     }
     
@@ -731,14 +963,8 @@ async function handleTwitterRequest(request) {
     console.error('Error handling Twitter request:', error);
     // Try alternative method for Twitter main page
     if (request.url.includes('twitter.com') || request.url.includes('x.com')) {
-      const url = new URL(request.url);
-      const isMainPage = (url.pathname === '/' || url.pathname === '');
-      const isProfilePage = url.pathname.match(/^\/[a-zA-Z0-9_]+\/?$/);
-      
-      if (isMainPage || isProfilePage) {
-        console.log('Error accessing Twitter, using wrapper approach');
-        return generateTwitterWrapperResponse(request.url);
-      }
+      console.log('Error handling Twitter, using wrapper approach');
+      return generateTwitterWrapperResponse(request.url);
     }
     
     // Fall back to original request
@@ -748,135 +974,226 @@ async function handleTwitterRequest(request) {
 
 // Generate a wrapper HTML page that contains the Twitter page in an optimized way
 function generateTwitterWrapperResponse(twitterUrl) {
+  // Convert URL to mobile version if not already
+  let mobileTwitterUrl = twitterUrl;
+  try {
+    const parsedUrl = new URL(twitterUrl);
+    if (parsedUrl.hostname === 'twitter.com') {
+      parsedUrl.hostname = 'mobile.twitter.com';
+      mobileTwitterUrl = parsedUrl.toString();
+    } else if (parsedUrl.hostname === 'x.com') {
+      parsedUrl.hostname = 'mobile.x.com';
+      mobileTwitterUrl = parsedUrl.toString();
+    }
+    
+    // Add a cache busting parameter
+    const cacheBuster = Date.now();
+    const urlSeparator = mobileTwitterUrl.includes('?') ? '&' : '?';
+    mobileTwitterUrl = `${mobileTwitterUrl}${urlSeparator}_cb=${cacheBuster}`;
+  } catch (e) {
+    console.error('Error converting to mobile URL:', e);
+  }
+
   const twitterWrappedHtml = `
 <!DOCTYPE html>
 <html lang="en">
 <head>
   <meta charset="UTF-8">
-  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no, viewport-fit=cover">
+  <meta http-equiv="Content-Security-Policy" content="default-src * 'unsafe-inline' 'unsafe-eval' data: blob:; frame-src *;">
+  <meta http-equiv="X-Frame-Options" content="ALLOWALL">
   <title>Twitter - Web Viewer</title>
   <style>
+    /* Remove any margin/padding and set full height */
     html, body {
       margin: 0;
       padding: 0;
-      height: 100%;
-      overflow: hidden;
-    }
-    #twitter-wrapper {
       width: 100%;
       height: 100%;
-      position: relative;
+      overflow: hidden;
+      font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, Helvetica, Arial, sans-serif;
     }
-    iframe {
+    
+    /* Make iframe full size */
+    #wrapper-iframe {
       width: 100%;
       height: 100%;
       border: none;
+      position: relative;
+      display: block;
     }
-    .loading {
-      position: absolute;
+    
+    /* Ensure content fills entire viewport */
+    #content-container {
+      position: fixed;
       top: 0;
       left: 0;
-      width: 100%;
-      height: 100%;
-      background: white;
+      right: 0;
+      bottom: 0;
+      display: flex;
+      flex-direction: column;
+    }
+    
+    /* Loading spinner */
+    .loading {
+      position: fixed;
+      top: 0;
+      left: 0;
+      right: 0;
+      bottom: 0;
+      background-color: rgba(255, 255, 255, 0.9);
       display: flex;
       flex-direction: column;
       justify-content: center;
       align-items: center;
       z-index: 10;
+      transition: opacity 0.3s;
     }
+    
     .spinner {
-      width: 40px;
-      height: 40px;
-      border: 4px solid #f3f3f3;
-      border-top: 4px solid #1DA1F2;
+      width: 50px;
+      height: 50px;
+      border: 5px solid #f3f3f3;
+      border-top: 5px solid #1DA1F2;
       border-radius: 50%;
       animation: spin 1s linear infinite;
-      margin-bottom: 16px;
+      margin-bottom: 20px;
     }
+    
     @keyframes spin {
       0% { transform: rotate(0deg); }
       100% { transform: rotate(360deg); }
     }
+    
+    .error {
+      display: none;
+      color: #E0245E;
+      text-align: center;
+      max-width: 80%;
+      margin-top: 20px;
+    }
   </style>
 </head>
 <body>
-  <div id="twitter-wrapper">
-    <div class="loading" id="loading">
+  <div id="content-container">
+    <!-- First, we'll create a div for our loading spinner -->
+    <div id="loading" class="loading">
       <div class="spinner"></div>
-      <p>Loading Twitter...</p>
+      <div>Loading Twitter (Mobile View)...</div>
+      <div id="error" class="error"></div>
     </div>
-    <iframe id="twitter-frame" src="about:blank"></iframe>
+    
+    <!-- Then create an iframe that will load the Twitter mobile page -->
+    <iframe id="wrapper-iframe" sandbox="allow-same-origin allow-scripts allow-forms allow-popups allow-popups-to-escape-sandbox"
+            allow="accelerometer; autoplay; clipboard-write; encrypted-media; gyroscope; picture-in-picture"
+            title="Twitter Content"></iframe>
   </div>
-  
+
   <script>
-    (function() {
-      // The URL to load
-      const twitterUrl = "${twitterUrl}";
-      const frame = document.getElementById('twitter-frame');
-      const loading = document.getElementById('loading');
+    // Reference our elements
+    const contentFrame = document.getElementById('wrapper-iframe');
+    const loadingEl = document.getElementById('loading');
+    const errorEl = document.getElementById('error');
+    
+    // Function to show/hide loading
+    function setLoading(show, error = null) {
+      loadingEl.style.opacity = show ? '1' : '0';
+      loadingEl.style.pointerEvents = show ? 'auto' : 'none';
       
-      // Set up frame load event
-      frame.addEventListener('load', function() {
-        // First hide the loading indicator after a short delay
+      if (error) {
+        errorEl.textContent = error;
+        errorEl.style.display = 'block';
+      } else {
+        errorEl.style.display = 'none';
+      }
+      
+      if (!show) {
+        // After fade out, hide completely
         setTimeout(() => {
-          loading.style.display = 'none';
-        }, 500);
+          loadingEl.style.display = 'none';
+        }, 300);
+      }
+    }
+    
+    // Function to handle frame load
+    function onFrameLoad() {
+      try {
+        setLoading(false);
         
-        try {
-          // Try to inject scripts into the frame to disable security checks
-          const frameDoc = frame.contentDocument || frame.contentWindow.document;
-          const script = frameDoc.createElement('script');
+        // Try to access the frame content (may fail due to CORS)
+        const frameWindow = contentFrame.contentWindow;
+        
+        // If we have access, inject our anti-frame-busting script
+        if (frameWindow && frameWindow.document) {
+          const script = frameWindow.document.createElement('script');
           script.textContent = \`
-            // Override security checks
-            Object.defineProperty(window, 'frameElement', { value: null });
-            Object.defineProperty(window, 'top', { value: window.self });
-            Object.defineProperty(window, 'parent', { value: window.self });
+            // Prevent frame busting techniques
+            window.open = function(url, target, features) {
+              console.log('Intercepted window.open:', url);
+              return window;
+            };
             
-            // Prevent location hijacking
-            const originalAssign = window.location.assign;
-            const originalReplace = window.location.replace;
-            window.location.assign = function(url) {
-              if (url && typeof url === 'string' && url.includes('top.location')) return;
-              return originalAssign.apply(this, arguments);
-            };
-            window.location.replace = function(url) {
-              if (url && typeof url === 'string' && url.includes('top.location')) return;
-              return originalReplace.apply(this, arguments);
-            };
+            // Override window.top and window.parent
+            Object.defineProperty(window, 'top', {
+              get: function() { return window; }
+            });
+            
+            Object.defineProperty(window, 'parent', {
+              get: function() { return window; }
+            });
+            
+            // Override document.domain
+            Object.defineProperty(document, 'domain', {
+              get: function() { return location.hostname; },
+              set: function() { return location.hostname; }
+            });
+            
+            console.log('Twitter frame-busting protection applied');
           \`;
-          
-          // Inject the script
-          if (frameDoc.body) {
-            frameDoc.body.appendChild(script);
-          }
-        } catch (e) {
-          // This will likely fail due to CORS, which is expected
-          console.log('Cannot access frame content due to CORS (expected)');
+          frameWindow.document.head.appendChild(script);
         }
-      });
-      
-      // Set up error handler
-      frame.addEventListener('error', function() {
-        loading.innerHTML = '<p>Error loading Twitter. Please try again.</p>';
-      });
-      
-      // Load Twitter with a cache-busting parameter
-      const cacheBuster = Date.now();
-      const urlWithCache = twitterUrl + (twitterUrl.includes('?') ? '&' : '?') + '_t=' + cacheBuster;
-      frame.src = urlWithCache;
-    })();
+      } catch (e) {
+        // This is expected due to CORS restrictions
+        console.log('Could not access frame content due to CORS (expected)');
+      }
+    }
+    
+    // Function to handle errors
+    function onFrameError(event) {
+      console.error('Error loading Twitter:', event);
+      setLoading(true, 'Failed to load Twitter. The site may be temporarily unavailable.');
+    }
+    
+    // Add event listeners
+    contentFrame.addEventListener('load', onFrameLoad);
+    contentFrame.addEventListener('error', onFrameError);
+    
+    // Set a loading timeout
+    const loadTimeout = setTimeout(() => {
+      if (loadingEl.style.opacity !== '0') {
+        setLoading(true, 'Loading is taking longer than expected. Twitter may be unavailable.');
+      }
+    }, 20000);
+    
+    // Load the URL
+    try {
+      contentFrame.src = "${mobileTwitterUrl}";
+    } catch (e) {
+      console.error('Error setting iframe src:', e);
+      setLoading(true, 'Error loading Twitter: ' + e.message);
+    }
   </script>
 </body>
-</html>
-  `;
+</html>`;
+
+  // Create and return a Response with the HTML content
+  const headers = new Headers({
+    'Content-Type': 'text/html; charset=utf-8',
+    'X-Frame-Options': 'ALLOWALL',
+    'Content-Security-Policy': "default-src * 'unsafe-inline' 'unsafe-eval' data: blob:; frame-src *;",
+    'Access-Control-Allow-Origin': '*'
+  });
   
-  // Create headers for our wrapper response
-  const headers = new Headers();
-  headers.set('Content-Type', 'text/html; charset=utf-8');
-  headers.set('X-Frame-Options-Modified', 'true');
-  
-  // Return our custom HTML wrapper
   return new Response(twitterWrappedHtml, {
     status: 200,
     headers: headers
@@ -1124,4 +1441,150 @@ async function extractTokensFromResponse(response) {
   } catch (error) {
     console.error('Error extracting tokens:', error);
   }
+}
+
+// Function to modify request headers based on the URL
+function getModifiedHeaders(url, originalHeaders) {
+  const headers = new Headers();
+  
+  // Copy original headers
+  for (const [key, value] of originalHeaders.entries()) {
+    // Skip specific headers we want to override
+    if (!['user-agent', 'origin', 'referer'].includes(key.toLowerCase())) {
+      headers.append(key, value);
+    }
+  }
+  
+  // Apply enhanced headers for better compatibility
+  const urlObj = new URL(url);
+  
+  // Twitter/X needs special headers
+  if (urlObj.hostname.includes('twitter.com') || urlObj.hostname.includes('x.com')) {
+    headers.set('User-Agent', MOBILE_USER_AGENT);
+    headers.set('Origin', 'https://mobile.twitter.com');
+    headers.set('Referer', 'https://mobile.twitter.com/');
+    headers.set('x-twitter-active-user', 'yes');
+    headers.set('x-twitter-client-language', 'en');
+    
+    // For API requests, add more specific headers
+    if (urlObj.hostname.includes('api.')) {
+      headers.set('x-twitter-auth-type', 'OAuth2Session');
+      if (guestToken) {
+        headers.set('x-guest-token', guestToken);
+      }
+      headers.set('authorization', 'Bearer AAAAAAAAAAAAAAAAAAAAANRILgAAAAAAnNwIzUejRCOuH5E6I8xnZz4puTs%3D1Zv7ttfk8LF81IUq16cHjhLTvJu4FA33AGWWjCpTnA');
+    }
+  } 
+  // YouTube needs its own set of headers
+  else if (urlObj.hostname.includes('youtube.com')) {
+    headers.set('User-Agent', MOBILE_USER_AGENT);
+    headers.set('Origin', 'https://m.youtube.com');
+    headers.set('Referer', 'https://m.youtube.com/');
+  } 
+  // For all other sites, use generic headers
+  else {
+    headers.set('User-Agent', ENHANCED_REQUEST_HEADERS['User-Agent']);
+    for (const [key, value] of Object.entries(ENHANCED_REQUEST_HEADERS)) {
+      if (key !== 'User-Agent') {
+        headers.set(key, value);
+      }
+    }
+  }
+  
+  return headers;
+}
+
+// Function to determine if a response should be cached
+function shouldCacheResponse(url, response) {
+  try {
+    const urlObj = new URL(url);
+    
+    // Don't cache extension URLs
+    if (urlObj.protocol === 'chrome-extension:') {
+      return false;
+    }
+    
+    // Don't cache API calls or authentication endpoints
+    if (url.includes('/api/') || 
+        url.includes('oauth') || 
+        url.includes('auth') || 
+        url.includes('login')) {
+      return false;
+    }
+    
+    // Don't cache non-success responses
+    if (!response.ok) {
+      return false;
+    }
+    
+    // Don't cache if cache-control says no-store
+    const cacheControl = response.headers.get('cache-control');
+    if (cacheControl && (cacheControl.includes('no-store') || cacheControl.includes('no-cache'))) {
+      return false;
+    }
+    
+    // Don't cache very large responses
+    const contentLength = response.headers.get('content-length');
+    if (contentLength && parseInt(contentLength, 10) > 5 * 1024 * 1024) { // > 5MB
+      return false;
+    }
+    
+    // For Twitter/YouTube, be more selective
+    if (urlObj.hostname.includes('twitter.com') || urlObj.hostname.includes('x.com')) {
+      // Only cache static assets and main pages
+      return url.includes('/static/') || 
+             url.endsWith('.js') || 
+             url.endsWith('.css') || 
+             url.endsWith('.png') || 
+             url.endsWith('.jpg') || 
+             url.endsWith('.svg') ||
+             url === 'https://twitter.com/' ||
+             url === 'https://x.com/';
+    }
+    
+    // Cache most other responses
+    return true;
+  } catch (error) {
+    console.error('Error in shouldCacheResponse:', error);
+    return false;
+  }
+}
+
+// Function to modify response headers to allow framing
+function modifyResponseHeaders(originalHeaders) {
+  const headers = new Headers(originalHeaders);
+  
+  // Remove security headers that prevent framing
+  const headersToRemove = [
+    'Content-Security-Policy',
+    'X-Frame-Options',
+    'X-Content-Type-Options',
+    'X-XSS-Protection',
+    'Frame-Options',
+    'Content-Security-Policy-Report-Only'
+  ];
+  
+  headersToRemove.forEach(header => {
+    if (headers.has(header)) {
+      headers.delete(header);
+    }
+  });
+  
+  // Add headers that allow framing
+  headers.set('Access-Control-Allow-Origin', '*');
+  headers.set('X-Frame-Options', 'ALLOWALL');
+  
+  // If CSP exists and we can't remove it, try to modify it
+  const csp = originalHeaders.get('Content-Security-Policy');
+  if (csp) {
+    // Replace frame-ancestors directive
+    let modifiedCsp = csp.replace(/frame-ancestors[^;]*;/g, 'frame-ancestors *;');
+    if (modifiedCsp === csp) {
+      // If no frame-ancestors directive exists, add one
+      modifiedCsp = 'frame-ancestors *; ' + csp;
+    }
+    headers.set('Content-Security-Policy', modifiedCsp);
+  }
+  
+  return headers;
 } 
