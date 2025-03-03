@@ -6,14 +6,28 @@ document.addEventListener('DOMContentLoaded', function() {
   // Add click event listener
   openSidePanelButton.addEventListener('click', function() {
     try {
-      // Use the standard Chrome API call without additional options
-      // Different Chrome versions may support different options
-      chrome.sidePanel.open({}, function() {
-        // Removed window.close() to keep the popup open
+      // Get the current window and open the side panel
+      chrome.windows.getCurrent(function(currentWindow) {
+        chrome.sidePanel.open({
+          windowId: currentWindow.id
+        }).then(() => {
+          // Close the popup after successfully opening the side panel
+          window.close();
+        }).catch((error) => {
+          console.error('Error opening side panel:', error);
+        });
       });
     } catch (error) {
       console.error('Error opening side panel:', error);
-      // Show error message if needed
+      // Try fallback method if the first attempt fails
+      try {
+        chrome.sidePanel.open({}, () => {
+          // Close the popup after the fallback attempt
+          window.close();
+        });
+      } catch (fallbackError) {
+        console.error('Fallback method also failed:', fallbackError);
+      }
     }
   });
 }); 
