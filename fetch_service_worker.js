@@ -166,6 +166,10 @@ self.addEventListener('message', async (event) => {
 // Initialize declarativeNetRequest rules to remove security headers
 async function initializeHeaderModificationRules() {
   try {
+    // Get extension ID to restrict rules to only extension URLs
+    const extensionId = chrome.runtime.id;
+    const extensionUrlPattern = `chrome-extension://${extensionId}/*`;
+    
     // Remove any existing rules first
     await chrome.declarativeNetRequest.updateSessionRules({
       removeRuleIds: [1, 2, 3, 4, 5]
@@ -201,7 +205,8 @@ async function initializeHeaderModificationRules() {
               chrome.declarativeNetRequest.ResourceType.MAIN_FRAME,
               chrome.declarativeNetRequest.ResourceType.SUB_FRAME,
               chrome.declarativeNetRequest.ResourceType.XMLHTTPREQUEST
-            ]
+            ],
+            initiatorDomains: [extensionId] // Only apply when requests are initiated by our extension
           }
         },
         // Rule for X-Frame-Options for general sites
@@ -222,7 +227,8 @@ async function initializeHeaderModificationRules() {
             resourceTypes: [
               chrome.declarativeNetRequest.ResourceType.MAIN_FRAME,
               chrome.declarativeNetRequest.ResourceType.SUB_FRAME
-            ]
+            ],
+            initiatorDomains: [extensionId] // Only apply when requests are initiated by our extension
           }
         },
         // Rule for other security headers for general sites
@@ -264,7 +270,8 @@ async function initializeHeaderModificationRules() {
               chrome.declarativeNetRequest.ResourceType.MAIN_FRAME,
               chrome.declarativeNetRequest.ResourceType.SUB_FRAME,
               chrome.declarativeNetRequest.ResourceType.XMLHTTPREQUEST
-            ]
+            ],
+            initiatorDomains: [extensionId] // Only apply when requests are initiated by our extension
           }
         },
         // Mobile UA rule for Twitter/X domains with maximum priority
@@ -310,10 +317,11 @@ async function initializeHeaderModificationRules() {
               chrome.declarativeNetRequest.ResourceType.IMAGE,
               chrome.declarativeNetRequest.ResourceType.SCRIPT,
               chrome.declarativeNetRequest.ResourceType.STYLESHEET
-            ]
+            ],
+            initiatorDomains: [extensionId] // Only apply when requests are initiated by our extension
           }
         },
-        // Mobile UA rule for all other domains
+        // Mobile UA rule for all other domains - ONLY FROM OUR EXTENSION
         {
           id: 5,
           priority: 200,
@@ -356,13 +364,14 @@ async function initializeHeaderModificationRules() {
               chrome.declarativeNetRequest.ResourceType.IMAGE,
               chrome.declarativeNetRequest.ResourceType.SCRIPT,
               chrome.declarativeNetRequest.ResourceType.STYLESHEET
-            ]
+            ],
+            initiatorDomains: [extensionId] // Only apply when requests are initiated by our extension
           }
         }
       ]
     });
     
-    console.log('Successfully set up declarativeNetRequest rules for header modification (mobile)');
+    console.log('Successfully set up declarativeNetRequest rules for header modification (with extension-only scope)');
   } catch (error) {
     console.error('Failed to set up declarativeNetRequest rules:', error);
   }
@@ -416,9 +425,24 @@ self.addEventListener('fetch', event => {
     return;
   }
   
-  // Handle the fetch with our custom logic
+  // Check if this request is coming from our extension's panel
+  // If it's not from our panel, let the browser handle it normally
+  if (!event.clientId || !isFromExtensionPanel(event.request)) {
+    return; // Let the browser handle normal web browsing without modification
+  }
+  
+  // Handle the fetch with our custom logic only for requests from our panel
   event.respondWith(handleFetchRequest(event, url));
 });
+
+// Helper function to determine if a request is from our extension panel
+function isFromExtensionPanel(request) {
+  // Check for extension-specific headers or referrer
+  const referrer = request.referrer || '';
+  return referrer.includes('chrome-extension://') || 
+         referrer.includes('panel.html') ||
+         request.url.includes('chrome-extension://');
+}
 
 async function handleFetchRequest(event, url) {
   try {
@@ -496,9 +520,9 @@ async function handleFetchRequest(event, url) {
     } else if (isYouTube) {
       // For YouTube, convert to mobile format if requested
       requestUrl = isMobile ? convertToMobileUrl(url, true) : url;
-    } else if (isMobile) {
-      // For all other domains, convert to mobile if mobile view is enabled
-      requestUrl = convertToMobileUrl(url, true);
+    } else {
+      // For all other domains, keep the original URL unless mobile view is specifically requested
+      requestUrl = isMobile ? convertToMobileUrl(url, false) : url;
     }
     
     // Clone the request for modification
@@ -1481,13 +1505,27 @@ function getModifiedHeaders(url, originalHeaders) {
     headers.set('Origin', 'https://m.youtube.com');
     headers.set('Referer', 'https://m.youtube.com/');
   } 
-  // For all other sites, use generic headers
+  // For all other sites, use desktop user agent by default
   else {
-    headers.set('User-Agent', ENHANCED_REQUEST_HEADERS['User-Agent']);
-    for (const [key, value] of Object.entries(ENHANCED_REQUEST_HEADERS)) {
-      if (key !== 'User-Agent') {
-        headers.set(key, value);
-      }
+    headers.set('User-Agent', DESKTOP_USER_AGENT);
+    
+    // Add other headers but keep them desktop-oriented
+    const otherHeaders = {
+      'Accept': 'text/html,application/xhtml+xml,application/xml;q=0.9,image/webp,image/apng,*/*;q=0.8',
+      'Accept-Language': 'en-US,en;q=0.9',
+      'Accept-Encoding': 'gzip, deflate, br',
+      'Upgrade-Insecure-Requests': '1',
+      'Sec-Fetch-Dest': 'document',
+      'Sec-Fetch-Mode': 'navigate',
+      'Sec-Fetch-Site': 'none',
+      'Sec-Fetch-User': '?1',
+      'Sec-CH-UA': '"Google Chrome";v="113", "Chromium";v="113"',
+      'Sec-CH-UA-Mobile': '?0',
+      'Sec-CH-UA-Platform': '"macOS"'
+    };
+    
+    for (const [key, value] of Object.entries(otherHeaders)) {
+      headers.set(key, value);
     }
   }
   
