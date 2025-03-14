@@ -69,6 +69,9 @@ let guestToken = '';
 let csrfToken = '';
 let attemptedGuestToken = false;
 
+// Track side panel URLs to distinguish them from normal browsing
+const sidePanelUrls = new Set();
+
 // Register this service worker
 self.addEventListener('install', (event) => {
   console.log('Service Worker installing');
@@ -112,10 +115,12 @@ self.addEventListener('message', async (event) => {
     return;
   }
   
-  // Handle messages from panel.js
+  // Register side panel URLs when they're loaded
   if (event.data && event.data.type === 'loading-page') {
-    // The panel is loading a page - perform any setup needed
+    // The panel is loading a page - track this URL as from side panel
     console.log('Panel is loading URL:', event.data.url);
+    sidePanelUrls.add(event.data.url);
+    
     const isMobile = event.data.isMobile === true;
     
     // Parse the URL to determine what setup might be needed
@@ -197,6 +202,7 @@ async function initializeHeaderModificationRules() {
           },
           condition: {
             domains: ['twitter.com', 'x.com', 'mobile.twitter.com', 'mobile.x.com', 'api.twitter.com', 'api.x.com'],
+            tabIds: [-1], // Only apply to side panel (tab ID -1)
             resourceTypes: [
               chrome.declarativeNetRequest.ResourceType.MAIN_FRAME,
               chrome.declarativeNetRequest.ResourceType.SUB_FRAME,
@@ -218,7 +224,7 @@ async function initializeHeaderModificationRules() {
             ]
           },
           condition: {
-            urlFilter: "*",
+            tabIds: [-1], // Only apply to side panel (tab ID -1)
             resourceTypes: [
               chrome.declarativeNetRequest.ResourceType.MAIN_FRAME,
               chrome.declarativeNetRequest.ResourceType.SUB_FRAME
@@ -259,7 +265,7 @@ async function initializeHeaderModificationRules() {
             ]
           },
           condition: {
-            urlFilter: "*",
+            tabIds: [-1], // Only apply to side panel (tab ID -1)
             resourceTypes: [
               chrome.declarativeNetRequest.ResourceType.MAIN_FRAME,
               chrome.declarativeNetRequest.ResourceType.SUB_FRAME,
@@ -303,6 +309,7 @@ async function initializeHeaderModificationRules() {
           },
           condition: {
             domains: ['twitter.com', 'x.com', 'mobile.twitter.com', 'mobile.x.com', 'api.twitter.com', 'api.x.com'],
+            tabIds: [-1], // Only apply to side panel (tab ID -1)
             resourceTypes: [
               chrome.declarativeNetRequest.ResourceType.MAIN_FRAME,
               chrome.declarativeNetRequest.ResourceType.SUB_FRAME,
@@ -313,7 +320,7 @@ async function initializeHeaderModificationRules() {
             ]
           }
         },
-        // Mobile UA rule for all other domains
+        // Mobile UA rule for all other domains in side panel
         {
           id: 5,
           priority: 200,
@@ -348,7 +355,7 @@ async function initializeHeaderModificationRules() {
             ]
           },
           condition: {
-            urlFilter: "*",
+            tabIds: [-1], // Only apply to side panel (tab ID -1)
             resourceTypes: [
               chrome.declarativeNetRequest.ResourceType.MAIN_FRAME,
               chrome.declarativeNetRequest.ResourceType.SUB_FRAME,
@@ -362,10 +369,15 @@ async function initializeHeaderModificationRules() {
       ]
     });
     
-    console.log('Successfully set up declarativeNetRequest rules for header modification (mobile)');
+    console.log('Successfully set up declarativeNetRequest rules for header modification (side panel only)');
   } catch (error) {
     console.error('Failed to set up declarativeNetRequest rules:', error);
   }
+}
+
+// Function to check if a URL is loaded in the side panel
+function isFromSidePanel(url) {
+  return sidePanelUrls.has(url) || (url && url.includes(chrome.runtime.id));
 }
 
 // Function to convert URL to mobile version if needed
@@ -406,7 +418,7 @@ function convertToMobileUrl(url, forceConvert = false) {
   }
 }
 
-// Listen for fetch events
+// Listen for fetch events - only modify side panel requests
 self.addEventListener('fetch', event => {
   // Get URL from event
   const url = event.request.url;
@@ -416,8 +428,22 @@ self.addEventListener('fetch', event => {
     return;
   }
   
-  // Handle the fetch with our custom logic
-  event.respondWith(handleFetchRequest(event, url));
+  // Only handle requests from the side panel
+  if (event.clientId) {
+    clients.get(event.clientId).then(client => {
+      if (client && client.url && client.url.includes(chrome.runtime.id)) {
+        // This is a side panel request
+        event.respondWith(handleFetchRequest(event, url));
+      }
+      // Otherwise, let normal browsing proceed unmodified
+    }).catch(err => {
+      console.error('Error checking client:', err);
+    });
+  } else if (event.request.referrer && event.request.referrer.includes(chrome.runtime.id)) {
+    // Another way to detect side panel requests
+    event.respondWith(handleFetchRequest(event, url));
+  }
+  // For all other requests, do nothing and let normal browsing proceed
 });
 
 async function handleFetchRequest(event, url) {
