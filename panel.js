@@ -6,14 +6,11 @@ document.addEventListener('DOMContentLoaded', () => {
   const viewFrame = document.getElementById('view-frame');
   const loadingIndicator = document.getElementById('loading-indicator');
   const errorMessage = document.getElementById('error-message');
-  const toggleMobileButton = document.getElementById('toggle-mobile');
   const clearButton = document.getElementById('clear-button');
   const refreshButton = document.getElementById('refresh-button');
-  const viewModeIndicator = document.getElementById('view-mode');
   
   // State variables
   let swRegistration = null;
-  let isMobileView = false;
   let currentUrl = '';
   
   // Initialize the service worker
@@ -91,12 +88,12 @@ document.addEventListener('DOMContentLoaded', () => {
     hideError();
     
     try {
-      // Inform service worker that we're loading a page
+      // Inform service worker that we're loading a page - always use mobile view
       if (swRegistration && swRegistration.active) {
         swRegistration.active.postMessage({
           type: 'loading-page',
           url: url,
-          isMobile: isMobileView
+          isMobile: true // Always use mobile view
         });
       }
       
@@ -125,13 +122,13 @@ document.addEventListener('DOMContentLoaded', () => {
         clearTimeout(loadTimeout);
         showLoading(false);
         
-        // Inform service worker that page loaded successfully
+        // Inform service worker that page loaded successfully - always use mobile view
         if (swRegistration && swRegistration.active) {
           swRegistration.active.postMessage({
             type: 'page-loaded',
             success: true,
             url: url,
-            isMobile: isMobileView
+            isMobile: true // Always use mobile view
           });
         }
       };
@@ -149,7 +146,7 @@ document.addEventListener('DOMContentLoaded', () => {
             success: false,
             url: url,
             error: error.message,
-            isMobile: isMobileView
+            isMobile: true // Always use mobile view
           });
         }
       };
@@ -221,21 +218,6 @@ document.addEventListener('DOMContentLoaded', () => {
       showError(`Load error: ${data.error}`);
     }
   }
-
-  // Toggle mobile view
-  function toggleMobileView() {
-    isMobileView = !isMobileView;
-    if (toggleMobileButton) {
-      toggleMobileButton.textContent = isMobileView ? '🖥️ Desktop View' : '📱 Mobile View';
-    }
-    
-    // Update view mode indicator
-    if (viewModeIndicator) {
-      viewModeIndicator.textContent = isMobileView ? 'Mobile' : 'Desktop';
-    }
-    
-    showNotification(`Switched to ${isMobileView ? 'mobile' : 'desktop'} view. Reload the page to apply.`);
-  }
   
   // Function to clear the address bar
   function clearAddressBar() {
@@ -284,10 +266,6 @@ document.addEventListener('DOMContentLoaded', () => {
     } else if (clearButton) {
       clearButton.style.display = 'none';
     }
-  }
-  
-  if (toggleMobileButton) {
-    toggleMobileButton.addEventListener('click', toggleMobileView);
   }
   
   if (clearButton) {

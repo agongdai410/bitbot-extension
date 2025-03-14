@@ -121,7 +121,7 @@ self.addEventListener('message', async (event) => {
     console.log('Panel is loading URL:', event.data.url);
     sidePanelUrls.add(event.data.url);
     
-    const isMobile = event.data.isMobile === true;
+    // Always use mobile view (ignore the isMobile parameter - always true)
     
     // Parse the URL to determine what setup might be needed
     try {
@@ -153,7 +153,8 @@ self.addEventListener('message', async (event) => {
   } else if (event.data && event.data.type === 'page-loaded') {
     // The panel reports a page was loaded (or failed)
     console.log('Panel reports page loaded:', event.data.success ? 'success' : 'failed');
-    const isMobile = event.data.isMobile === true;
+    
+    // Always use mobile view (ignore the isMobile parameter - always true)
     
     // If the client needs a response, send one
     if (event.source) {
@@ -162,7 +163,7 @@ self.addEventListener('message', async (event) => {
         success: event.data.success,
         url: event.data.url,
         error: event.data.error || null,
-        isMobile: isMobile
+        isMobile: true // Always use mobile view
       });
     }
   }
@@ -387,28 +388,27 @@ function convertToMobileUrl(url, forceConvert = false) {
   try {
     const parsedUrl = new URL(url);
     
-    // Only convert if mobile flag is set or forced
-    if (forceConvert) {
-      // Handle common domains
-      if (parsedUrl.hostname === 'twitter.com') {
-        parsedUrl.hostname = 'mobile.twitter.com';
-      } else if (parsedUrl.hostname === 'x.com') {
-        parsedUrl.hostname = 'mobile.x.com';
-      } else if (parsedUrl.hostname === 'www.youtube.com' || parsedUrl.hostname === 'youtube.com') {
-        parsedUrl.hostname = 'm.youtube.com';
-      } else if (parsedUrl.hostname === 'www.reddit.com' || parsedUrl.hostname === 'reddit.com') {
-        parsedUrl.hostname = 'old.reddit.com'; // Old reddit is more iframe-friendly
-      } else if (parsedUrl.hostname === 'www.wikipedia.org') {
-        parsedUrl.hostname = 'en.m.wikipedia.org';
-      } else if (parsedUrl.hostname.endsWith('.wikipedia.org') && !parsedUrl.hostname.includes('.m.')) {
-        // Convert all wikipedia domains to mobile
-        parsedUrl.hostname = parsedUrl.hostname.replace('.wikipedia.org', '.m.wikipedia.org');
-      } else if (parsedUrl.hostname === 'www.facebook.com') {
-        parsedUrl.hostname = 'm.facebook.com';
-      } else if (parsedUrl.hostname === 'www.instagram.com' || parsedUrl.hostname === 'instagram.com') {
-        // Instagram auto-detects from UA
-        parsedUrl.hostname = 'www.instagram.com';
-      }
+    // Always convert to mobile (ignore forceConvert parameter - always true)
+    
+    // Handle common domains
+    if (parsedUrl.hostname === 'twitter.com') {
+      parsedUrl.hostname = 'mobile.twitter.com';
+    } else if (parsedUrl.hostname === 'x.com') {
+      parsedUrl.hostname = 'mobile.x.com';
+    } else if (parsedUrl.hostname === 'www.youtube.com' || parsedUrl.hostname === 'youtube.com') {
+      parsedUrl.hostname = 'm.youtube.com';
+    } else if (parsedUrl.hostname === 'www.reddit.com' || parsedUrl.hostname === 'reddit.com') {
+      parsedUrl.hostname = 'old.reddit.com'; // Old reddit is more iframe-friendly
+    } else if (parsedUrl.hostname === 'www.wikipedia.org') {
+      parsedUrl.hostname = 'en.m.wikipedia.org';
+    } else if (parsedUrl.hostname.endsWith('.wikipedia.org') && !parsedUrl.hostname.includes('.m.')) {
+      // Convert all wikipedia domains to mobile
+      parsedUrl.hostname = parsedUrl.hostname.replace('.wikipedia.org', '.m.wikipedia.org');
+    } else if (parsedUrl.hostname === 'www.facebook.com') {
+      parsedUrl.hostname = 'm.facebook.com';
+    } else if (parsedUrl.hostname === 'www.instagram.com' || parsedUrl.hostname === 'instagram.com') {
+      // Instagram auto-detects from UA
+      parsedUrl.hostname = 'www.instagram.com';
     }
     
     return parsedUrl.toString();
@@ -451,18 +451,8 @@ async function handleFetchRequest(event, url) {
     // Get client ID for tracking state
     const clientId = event.clientId;
     
-    // Get isMobile preference if possible
-    let isMobile = false;
-    try {
-      if (clientId) {
-        const client = await clients.get(clientId);
-        if (client && typeof client.isMobile !== 'undefined') {
-          isMobile = client.isMobile === true;
-        }
-      }
-    } catch (e) {
-      console.log('Error getting client mobile preference:', e);
-    }
+    // Always use mobile view
+    let isMobile = true;
     
     // Check cache first
     const cachedResponse = await caches.match(event.request);
@@ -494,11 +484,11 @@ async function handleFetchRequest(event, url) {
       const isProfilePage = /^\/[a-zA-Z0-9_]+\/?$/.test(parsedUrl.pathname);
       const needsSpecialHandling = isMainPage || isProfilePage;
       
+      // For Twitter, always convert to mobile URL
+      requestUrl = convertToMobileUrl(url, true);
+      
       // For Twitter, check if it needs the wrapper approach
       if (needsSpecialHandling) {
-        // Force using a mobile URL for Twitter if mobile view is requested
-        requestUrl = isMobile ? convertToMobileUrl(url, true) : url;
-        
         try {
           // Quickly check if we can access the page directly
           const headResponse = await fetch(requestUrl, { 
@@ -515,15 +505,12 @@ async function handleFetchRequest(event, url) {
           console.log('Error checking Twitter/X page accessibility:', error);
           return generateTwitterWrapperResponse(requestUrl);
         }
-      } else {
-        // For other Twitter URLs, convert to mobile if needed
-        requestUrl = isMobile ? convertToMobileUrl(url, true) : url;
       }
     } else if (isYouTube) {
-      // For YouTube, convert to mobile format if requested
-      requestUrl = isMobile ? convertToMobileUrl(url, true) : url;
-    } else if (isMobile) {
-      // For all other domains, convert to mobile if mobile view is enabled
+      // For YouTube, always convert to mobile format
+      requestUrl = convertToMobileUrl(url, true);
+    } else {
+      // For all other domains, always convert to mobile
       requestUrl = convertToMobileUrl(url, true);
     }
     
@@ -538,7 +525,7 @@ async function handleFetchRequest(event, url) {
     });
     
     // The rest of the fetch handler
-    console.log(`Fetching ${isMobile ? 'mobile' : 'desktop'} URL:`, requestUrl);
+    console.log(`Fetching mobile URL:`, requestUrl);
     const response = await fetch(request);
     
     // Process the response

@@ -132,19 +132,6 @@
       display: block;
     }
 
-    .view-mode-indicator {
-      position: absolute;
-      top: 10px;
-      right: 10px;
-      background-color: rgba(0,0,0,0.5);
-      color: white;
-      font-size: 12px;
-      padding: 4px 8px;
-      border-radius: 12px;
-      z-index: 50;
-      opacity: 0.7;
-    }
-
     .loading-indicator {
       position: fixed;
       top: 0;
@@ -226,14 +213,12 @@
       <div class="actions">
         <button id="load-button" class="btn">Go</button>
         <button id="refresh-button" class="btn btn-secondary">Refresh</button>
-        <button id="toggle-mobile" class="btn btn-secondary">📱 Mobile View</button>
       </div>
     </div>
   </div>
 
   <div class="content">
     <iframe id="view-frame" src="about:blank"></iframe>
-    <div id="view-mode" class="view-mode-indicator">Desktop</div>
     
     <div id="loading-indicator" class="loading-indicator" style="display: none;">
       <div class="loading-content">
