@@ -5,13 +5,8 @@
   "description": "View any website in a side panel frame",
   "permissions": [
     "sidePanel",
-    "scripting",
-    "webRequest",
     "storage",
-    "cookies",
-    "tabs",
-    "declarativeNetRequestWithHostAccess",
-    "declarativeNetRequestFeedback"
+    "declarativeNetRequestWithHostAccess"
   ],
   "host_permissions": [
     "<all_urls>"
