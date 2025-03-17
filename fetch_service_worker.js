@@ -74,6 +74,7 @@ const sidePanelUrls = new Set();
 
 // Register this service worker
 self.addEventListener('install', (event) => {
+  console.log(new Date().toISOString() + ' - Service worker loaded');
   console.log('Service Worker installing');
   // Skip waiting to activate immediately
   self.skipWaiting();
