@@ -6,13 +6,21 @@
   "permissions": [
     "sidePanel",
     "storage",
-    "declarativeNetRequestWithHostAccess"
+    "declarativeNetRequestWithHostAccess",
+    "declarativeNetRequest"
   ],
   "host_permissions": [
     "<all_urls>"
   ],
   "side_panel": {
     "default_path": "panel.html"
+  },
+  "background": {
+    "service_worker": "fetch_service_worker.js",
+    "type": "module"
+  },
+  "content_security_policy": {
+    "extension_pages": "script-src 'self'; object-src 'self'; frame-src *"
   },
   "web_accessible_resources": [
     {
