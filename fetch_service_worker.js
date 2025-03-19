@@ -1,21 +1,24 @@
-// Domains that require special handling
+// Add Cloudflare domains to the existing domains list
+const CLOUDFLARE_DOMAINS = [
+  'gmgn.ai',
+  'www.gmgn.ai',
+  'dexscreener.com',
+  'dextools.io'
+];
+
+// Define Twitter/X domains
 const TWITTER_DOMAINS = [
   'twitter.com',
+  'www.twitter.com',
   'x.com',
+  'www.x.com',
+  'mobile.twitter.com',
+  'mobile.x.com',
   'abs.twimg.com',
   'pbs.twimg.com',
   'video.twimg.com',
   'api.twitter.com',
   'api.x.com'
-];
-
-const YOUTUBE_DOMAINS = [
-  'youtube.com',
-  'www.youtube.com',
-  'youtu.be',
-  'ytimg.com',
-  'yt3.ggpht.com',
-  'yt3.googleusercontent.com'
 ];
 
 // Constants
@@ -24,7 +27,7 @@ const CACHE_DURATION = 60 * 60 * 1000; // 1 hour in milliseconds
 
 // Browser user agents
 const MOBILE_USER_AGENT = 'Mozilla/5.0 (iPhone; CPU iPhone OS 15_0 like Mac OS X) AppleWebKit/605.1.15 (KHTML, like Gecko) Version/15.0 Mobile/15E148 Safari/604.1';
-const DESKTOP_USER_AGENT = 'Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/91.0.4472.114 Safari/537.36';
+const DESKTOP_USER_AGENT = 'Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/122.0.0.0 Safari/537.36';
 
 // Enhanced request headers that mimic a regular browser
 const ENHANCED_REQUEST_HEADERS = {
@@ -80,7 +83,7 @@ self.addEventListener('install', (event) => {
   self.skipWaiting();
   
   // Initialize the declarativeNetRequest rules
-  event.waitUntil(initializeHeaderModificationRules());
+  event.waitUntil(initializeHeaderRules());
 });
 
 self.addEventListener('activate', (event) => {
@@ -170,41 +173,42 @@ self.addEventListener('message', async (event) => {
   }
 });
 
-// Initialize declarativeNetRequest rules to remove security headers
-async function initializeHeaderModificationRules() {
+// Initialize all header modification rules
+async function initializeHeaderRules() {
   try {
+    console.log('Setting up header modification rules');
+    
     // Remove any existing rules first
     await chrome.declarativeNetRequest.updateSessionRules({
-      removeRuleIds: [1, 2, 3, 4, 5]
+      removeRuleIds: [1, 2, 3, 4, 5, 6, 7, 8]
     });
     
-    // Add rule for all websites - remove X-Frame-Options and CSP
+    // Add rules
     await chrome.declarativeNetRequest.updateSessionRules({
       addRules: [
-        // Rule specifically for X.com and Twitter - highest priority
+        // Rule 1: Higher priority rule specifically for gmgn.ai
         {
           id: 1,
-          priority: 1000, // Extremely high priority specifically for Twitter/X
+          priority: 9999, // Extremely high priority specifically for gmgn.ai
           action: {
             type: chrome.declarativeNetRequest.RuleActionType.MODIFY_HEADERS,
             responseHeaders: [
               {
                 header: "X-Frame-Options",
-                operation: chrome.declarativeNetRequest.HeaderOperation.REMOVE,
+                operation: chrome.declarativeNetRequest.HeaderOperation.REMOVE
               },
               {
                 header: "Content-Security-Policy",
-                operation: chrome.declarativeNetRequest.HeaderOperation.REMOVE,
+                operation: chrome.declarativeNetRequest.HeaderOperation.REMOVE
               },
               {
                 header: "Frame-Options",
-                operation: chrome.declarativeNetRequest.HeaderOperation.REMOVE,
+                operation: chrome.declarativeNetRequest.HeaderOperation.REMOVE
               }
             ]
           },
           condition: {
-            domains: ['twitter.com', 'x.com', 'mobile.twitter.com', 'mobile.x.com', 'api.twitter.com', 'api.x.com'],
-            tabIds: [-1], // Only apply to side panel (tab ID -1)
+            urlFilter: "*gmgn.ai*",
             resourceTypes: [
               chrome.declarativeNetRequest.ResourceType.MAIN_FRAME,
               chrome.declarativeNetRequest.ResourceType.SUB_FRAME,
@@ -212,62 +216,147 @@ async function initializeHeaderModificationRules() {
             ]
           }
         },
-        // Rule for X-Frame-Options for general sites
+        
+        // Rule 2: Remove security headers for all Cloudflare domains
         {
           id: 2,
-          priority: 100, 
+          priority: 1000,
           action: {
             type: chrome.declarativeNetRequest.RuleActionType.MODIFY_HEADERS,
-            responseHeaders: [
+            responseHeaders: HEADERS_TO_REMOVE.map(header => ({
+              header: header,
+              operation: chrome.declarativeNetRequest.HeaderOperation.REMOVE
+            }))
+          },
+          condition: {
+            domains: CLOUDFLARE_DOMAINS,
+            resourceTypes: [
+              chrome.declarativeNetRequest.ResourceType.MAIN_FRAME,
+              chrome.declarativeNetRequest.ResourceType.SUB_FRAME,
+              chrome.declarativeNetRequest.ResourceType.XMLHTTPREQUEST
+            ]
+          }
+        },
+        
+        // Rule 3: Set Desktop UA for Cloudflare domains
+        {
+          id: 3,
+          priority: 1000,
+          action: {
+            type: chrome.declarativeNetRequest.RuleActionType.MODIFY_HEADERS,
+            requestHeaders: [
               {
-                header: "X-Frame-Options",
-                operation: chrome.declarativeNetRequest.HeaderOperation.REMOVE,
+                header: "User-Agent",
+                operation: chrome.declarativeNetRequest.HeaderOperation.SET,
+                value: DESKTOP_USER_AGENT
+              },
+              {
+                header: "Sec-Fetch-Dest",
+                operation: chrome.declarativeNetRequest.HeaderOperation.SET,
+                value: "document"
               }
             ]
           },
           condition: {
-            tabIds: [-1], // Only apply to side panel (tab ID -1)
+            domains: CLOUDFLARE_DOMAINS,
+            resourceTypes: [
+              chrome.declarativeNetRequest.ResourceType.MAIN_FRAME,
+              chrome.declarativeNetRequest.ResourceType.SUB_FRAME,
+              chrome.declarativeNetRequest.ResourceType.XMLHTTPREQUEST,
+              chrome.declarativeNetRequest.ResourceType.SCRIPT,
+              chrome.declarativeNetRequest.ResourceType.STYLESHEET,
+              chrome.declarativeNetRequest.ResourceType.IMAGE
+            ]
+          }
+        },
+        
+        // Rule 4: Add Access-Control-Allow-Origin header for Cloudflare domains
+        {
+          id: 4,
+          priority: 1000,
+          action: {
+            type: chrome.declarativeNetRequest.RuleActionType.MODIFY_HEADERS,
+            responseHeaders: [
+              {
+                header: "Access-Control-Allow-Origin",
+                operation: chrome.declarativeNetRequest.HeaderOperation.SET,
+                value: "*"
+              }
+            ]
+          },
+          condition: {
+            domains: CLOUDFLARE_DOMAINS,
+            resourceTypes: [
+              chrome.declarativeNetRequest.ResourceType.MAIN_FRAME,
+              chrome.declarativeNetRequest.ResourceType.SUB_FRAME,
+              chrome.declarativeNetRequest.ResourceType.XMLHTTPREQUEST
+            ]
+          }
+        },
+        
+        // Rule 5: Add header that helps with Cloudflare detection
+        {
+          id: 5,
+          priority: 1000,
+          action: {
+            type: chrome.declarativeNetRequest.RuleActionType.MODIFY_HEADERS,
+            requestHeaders: [
+              {
+                header: "Sec-Fetch-Mode",
+                operation: chrome.declarativeNetRequest.HeaderOperation.SET,
+                value: "navigate"
+              },
+              {
+                header: "Sec-Fetch-Site",
+                operation: chrome.declarativeNetRequest.HeaderOperation.SET,
+                value: "none"
+              }
+            ]
+          },
+          condition: {
+            domains: CLOUDFLARE_DOMAINS,
             resourceTypes: [
               chrome.declarativeNetRequest.ResourceType.MAIN_FRAME,
               chrome.declarativeNetRequest.ResourceType.SUB_FRAME
             ]
           }
         },
-        // Rule for other security headers for general sites
+        
+        // Rule 6: Highest priority rule for removing security headers from X.com/Twitter
         {
-          id: 3,
-          priority: 100,
+          id: 6,
+          priority: 9999, // Extremely high priority specifically for Twitter/X
           action: {
             type: chrome.declarativeNetRequest.RuleActionType.MODIFY_HEADERS,
             responseHeaders: [
               {
-                header: "Content-Security-Policy",
-                operation: chrome.declarativeNetRequest.HeaderOperation.REMOVE,
+                header: "X-Frame-Options",
+                operation: chrome.declarativeNetRequest.HeaderOperation.REMOVE
               },
               {
-                header: "Content-Security-Policy-Report-Only",
-                operation: chrome.declarativeNetRequest.HeaderOperation.REMOVE,
+                header: "x-frame-options",
+                operation: chrome.declarativeNetRequest.HeaderOperation.REMOVE
+              },
+              {
+                header: "Content-Security-Policy",
+                operation: chrome.declarativeNetRequest.HeaderOperation.REMOVE
+              },
+              {
+                header: "content-security-policy",
+                operation: chrome.declarativeNetRequest.HeaderOperation.REMOVE
               },
               {
                 header: "Frame-Options",
-                operation: chrome.declarativeNetRequest.HeaderOperation.REMOVE,
+                operation: chrome.declarativeNetRequest.HeaderOperation.REMOVE
               },
               {
-                header: "Cross-Origin-Embedder-Policy",
-                operation: chrome.declarativeNetRequest.HeaderOperation.REMOVE,
-              },
-              {
-                header: "Cross-Origin-Opener-Policy",
-                operation: chrome.declarativeNetRequest.HeaderOperation.REMOVE,
-              },
-              {
-                header: "Cross-Origin-Resource-Policy",
-                operation: chrome.declarativeNetRequest.HeaderOperation.REMOVE,
+                header: "frame-options",
+                operation: chrome.declarativeNetRequest.HeaderOperation.REMOVE
               }
             ]
           },
           condition: {
-            tabIds: [-1], // Only apply to side panel (tab ID -1)
+            domains: TWITTER_DOMAINS,
             resourceTypes: [
               chrome.declarativeNetRequest.ResourceType.MAIN_FRAME,
               chrome.declarativeNetRequest.ResourceType.SUB_FRAME,
@@ -275,105 +364,68 @@ async function initializeHeaderModificationRules() {
             ]
           }
         },
-        // Mobile UA rule for Twitter/X domains with maximum priority
+        
+        // Rule 7: X.com with specific URL filter pattern (another way to target X.com)
         {
-          id: 4,
-          priority: 1000, // Extremely high priority for Twitter
+          id: 7,
+          priority: 9999,
           action: {
             type: chrome.declarativeNetRequest.RuleActionType.MODIFY_HEADERS,
-            requestHeaders: [
+            responseHeaders: [
               {
-                header: "User-Agent",
-                operation: chrome.declarativeNetRequest.HeaderOperation.SET,
-                value: ENHANCED_REQUEST_HEADERS["User-Agent"]
+                header: "X-Frame-Options",
+                operation: chrome.declarativeNetRequest.HeaderOperation.REMOVE
               },
               {
-                header: "Sec-Fetch-Dest",
-                operation: chrome.declarativeNetRequest.HeaderOperation.SET,
-                value: "document"
-              },
-              {
-                header: "viewport-width",
-                operation: chrome.declarativeNetRequest.HeaderOperation.SET,
-                value: "375"
-              },
-              {
-                header: "width", 
-                operation: chrome.declarativeNetRequest.HeaderOperation.SET,
-                value: "375"
-              },
-              {
-                header: "dpr",
-                operation: chrome.declarativeNetRequest.HeaderOperation.SET,
-                value: "2"
+                header: "Content-Security-Policy",
+                operation: chrome.declarativeNetRequest.HeaderOperation.REMOVE
               }
             ]
           },
           condition: {
-            domains: ['twitter.com', 'x.com', 'mobile.twitter.com', 'mobile.x.com', 'api.twitter.com', 'api.x.com'],
-            tabIds: [-1], // Only apply to side panel (tab ID -1)
+            urlFilter: "*://*.x.com/*|*://x.com/*|*://*.twitter.com/*|*://twitter.com/*",
             resourceTypes: [
               chrome.declarativeNetRequest.ResourceType.MAIN_FRAME,
               chrome.declarativeNetRequest.ResourceType.SUB_FRAME,
-              chrome.declarativeNetRequest.ResourceType.XMLHTTPREQUEST,
-              chrome.declarativeNetRequest.ResourceType.IMAGE,
-              chrome.declarativeNetRequest.ResourceType.SCRIPT,
-              chrome.declarativeNetRequest.ResourceType.STYLESHEET
+              chrome.declarativeNetRequest.ResourceType.XMLHTTPREQUEST
             ]
           }
         },
-        // Mobile UA rule for all other domains in side panel
+        
+        // Rule 8: Set Mobile UA for X.com/Twitter
         {
-          id: 5,
-          priority: 200,
+          id: 8,
+          priority: 1000,
           action: {
             type: chrome.declarativeNetRequest.RuleActionType.MODIFY_HEADERS,
             requestHeaders: [
               {
                 header: "User-Agent",
                 operation: chrome.declarativeNetRequest.HeaderOperation.SET,
-                value: ENHANCED_REQUEST_HEADERS["User-Agent"]
+                value: MOBILE_USER_AGENT
               },
               {
                 header: "Sec-Fetch-Dest",
                 operation: chrome.declarativeNetRequest.HeaderOperation.SET,
                 value: "document"
-              },
-              {
-                header: "viewport-width",
-                operation: chrome.declarativeNetRequest.HeaderOperation.SET,
-                value: "375"
-              },
-              {
-                header: "width", 
-                operation: chrome.declarativeNetRequest.HeaderOperation.SET,
-                value: "375"
-              },
-              {
-                header: "dpr",
-                operation: chrome.declarativeNetRequest.HeaderOperation.SET,
-                value: "2"
               }
             ]
           },
           condition: {
-            tabIds: [-1], // Only apply to side panel (tab ID -1)
+            domains: TWITTER_DOMAINS,
             resourceTypes: [
               chrome.declarativeNetRequest.ResourceType.MAIN_FRAME,
               chrome.declarativeNetRequest.ResourceType.SUB_FRAME,
-              chrome.declarativeNetRequest.ResourceType.XMLHTTPREQUEST,
-              chrome.declarativeNetRequest.ResourceType.IMAGE,
-              chrome.declarativeNetRequest.ResourceType.SCRIPT,
-              chrome.declarativeNetRequest.ResourceType.STYLESHEET
+              chrome.declarativeNetRequest.ResourceType.XMLHTTPREQUEST
             ]
           }
         }
       ]
     });
     
-    console.log('Successfully set up declarativeNetRequest rules for header modification (side panel only)');
+    console.log('Header modification rules set up successfully');
   } catch (error) {
-    console.error('Failed to set up declarativeNetRequest rules:', error);
+    console.error('Failed to set up header rules:', error);
   }
 }
 
@@ -803,186 +855,64 @@ async function handleYouTubeRequest(request) {
 }
 
 // Handle Twitter requests with special authentication
-async function handleTwitterRequest(request) {
+async function handleTwitterRequest(event, url) {
   try {
-    // Check if this is the main Twitter/X page, which needs special handling
-    const url = new URL(request.url);
-    const isMainPage = (url.hostname === 'twitter.com' || url.hostname === 'x.com') && 
-                       (url.pathname === '/' || url.pathname === '');
-    const isProfilePage = (url.hostname === 'twitter.com' || url.hostname === 'x.com') && 
-                         url.pathname.match(/^\/[a-zA-Z0-9_]+\/?$/);
+    // Create a modified request with mobile user agent
+    const modifiedHeaders = new Headers(event.request.headers);
+    modifiedHeaders.set('User-Agent', MOBILE_USER_AGENT);
+    modifiedHeaders.set('Sec-Fetch-Dest', 'document');
+    modifiedHeaders.set('Sec-Fetch-Mode', 'navigate');
+    modifiedHeaders.set('Sec-Fetch-Site', 'none');
+    modifiedHeaders.set('Accept', 'text/html,application/xhtml+xml,application/xml;q=0.9,image/webp,*/*;q=0.8');
+    modifiedHeaders.set('Accept-Language', 'en-US,en;q=0.5');
     
-    // For main page and profile pages, we'll try both methods
-    const needsSpecialHandling = isMainPage || isProfilePage;
-    
-    // For x.com domain, always use the wrapper (more reliable)
-    if (url.hostname === 'x.com' || url.hostname === 'www.x.com') {
-      console.log('X.com detected - using wrapper approach directly');
-      return generateTwitterWrapperResponse(request.url);
+    // Check if it's an x.com request - if so, use the wrapper (handled earlier)
+    const parsedUrl = new URL(url);
+    if (parsedUrl.hostname === 'x.com' || parsedUrl.hostname === 'www.x.com') {
+      return generateTwitterWrapperResponse(url);
     }
     
-    // Clone the request to modify
-    let modifiedRequest = new Request(request.url, {
-      method: request.method,
-      headers: new Headers(request.headers),
-      body: request.body,
+    // Create new request with modified headers
+    const modifiedRequest = new Request(url, {
+      method: event.request.method,
+      headers: modifiedHeaders,
+      body: event.request.body,
       mode: 'cors',
-      credentials: 'include'
+      credentials: 'include',
+      redirect: 'follow'
     });
     
-    // Add enhanced headers
-    Object.entries(ENHANCED_REQUEST_HEADERS).forEach(([key, value]) => {
-      modifiedRequest.headers.set(key, value);
+    // Fetch with modified request
+    const response = await fetch(modifiedRequest);
+    
+    // For all responses, remove security headers
+    const newHeaders = new Headers(response.headers);
+    
+    // Remove all security headers
+    for (const header of HEADERS_TO_REMOVE) {
+      newHeaders.delete(header);
+    }
+    
+    // Explicitly handle case variations
+    newHeaders.delete('X-Frame-Options');
+    newHeaders.delete('x-frame-options');
+    newHeaders.delete('Content-Security-Policy');
+    newHeaders.delete('content-security-policy');
+    
+    // Set permissive headers
+    newHeaders.set('Access-Control-Allow-Origin', '*');
+    newHeaders.set('X-Frame-Options-Modified', 'true');
+    
+    // Return modified response
+    return new Response(response.body, {
+      status: response.status,
+      statusText: response.statusText,
+      headers: newHeaders
     });
-    
-    // For Twitter, attempt to use mobile version explicitly
-    if (url.hostname === 'twitter.com') {
-      url.hostname = 'mobile.twitter.com';
-    } else if (url.hostname === 'x.com') {
-      url.hostname = 'mobile.x.com';
-    }
-    
-    // For Twitter API requests, add special authentication headers
-    if (request.url.includes('api.twitter.com') || request.url.includes('api.x.com')) {
-      // Add Twitter-specific API headers
-      Object.entries(TWITTER_API_HEADERS).forEach(([key, value]) => {
-        modifiedRequest.headers.set(key, value);
-      });
-      
-      // Add specific tokens if we have them
-      if (guestToken) {
-        modifiedRequest.headers.set('x-guest-token', guestToken);
-      }
-      if (csrfToken) {
-        modifiedRequest.headers.set('x-csrf-token', csrfToken);
-      }
-      
-      // Add special handling for GraphQL requests
-      if (request.url.includes('graphql')) {
-        modifiedRequest.headers.set('content-type', 'application/json');
-      }
-      
-      // Add special handling for UserByScreenName requests
-      if (request.url.includes('UserByScreenName')) {
-        // These feature flags are required for newer Twitter GraphQL API
-        const featureFlags = {
-          "responsive_web_graphql_exclude_directive_enabled": true,
-          "verified_phone_label_enabled": false,
-          "responsive_web_home_pinned_timelines_enabled": true,
-          "responsive_web_graphql_timeline_navigation_enabled": true,
-          "responsive_web_graphql_skip_user_profile_image_extensions_enabled": false,
-          "c9s_tweet_anatomy_moderator_badge_enabled": true,
-          "tweetypie_unmention_optimization_enabled": true,
-          "responsive_web_edit_tweet_api_enabled": true,
-          "graphql_is_translatable_rweb_tweet_is_translatable_enabled": true,
-          "view_counts_everywhere_api_enabled": true,
-          "longform_notetweets_consumption_enabled": true,
-          "responsive_web_twitter_article_tweet_consumption_enabled": false,
-          "tweet_awards_web_tipping_enabled": false,
-          "freedom_of_speech_not_reach_fetch_enabled": true,
-          "standardized_nudges_misinfo": true,
-          "tweet_with_visibility_results_prefer_gql_limited_actions_policy_enabled": true,
-          "longform_notetweets_rich_text_read_enabled": true,
-          "longform_notetweets_inline_media_enabled": true,
-          "responsive_web_enhance_cards_enabled": false
-        };
-        
-        // For POST requests (most GraphQL are POST), add feature flags to body
-        if (request.method === 'POST' && request.body) {
-          try {
-            const originalBody = await request.clone().json();
-            const modifiedBody = {
-              ...originalBody,
-              variables: {
-                ...originalBody.variables,
-                ...featureFlags
-              }
-            };
-            
-            // Create a new request with modified body
-            modifiedRequest = new Request(request.url, {
-              method: request.method,
-              headers: modifiedRequest.headers,
-              body: JSON.stringify(modifiedBody),
-              mode: modifiedRequest.mode,
-              credentials: modifiedRequest.credentials
-            });
-          } catch (e) {
-            console.error('Error modifying GraphQL body:', e);
-          }
-        }
-        
-        // For GET requests, add feature flags to URL
-        if (request.method === 'GET') {
-          // Create a new URL to add parameters
-          const newUrl = new URL(request.url);
-          
-          // Add each feature flag to the URL
-          Object.entries(featureFlags).forEach(([key, value]) => {
-            newUrl.searchParams.set(key, value.toString());
-          });
-          
-          // Create a new request with modified URL
-          modifiedRequest = new Request(newUrl.toString(), {
-            method: request.method,
-            headers: modifiedRequest.headers,
-            mode: modifiedRequest.mode,
-            credentials: modifiedRequest.credentials
-          });
-        }
-      }
-    }
-    
-    // Special handling for main Twitter page - always prefer wrapper
-    if (needsSpecialHandling) {
-      // Try to get a guest token if we don't have one
-      if (!guestToken && !attemptedGuestToken) {
-        attemptedGuestToken = true;
-        await getGuestToken();
-      }
-      
-      // Use the wrapper for twitter.com main pages as well - more consistent approach
-      return generateTwitterWrapperResponse(request.url);
-    }
-    
-    // Add cache busting for non-API requests to avoid cached responses
-    if (request.method === 'GET' && !request.url.includes('/api/') && !request.url.includes('graphql')) {
-      const url = new URL(request.url);
-      url.searchParams.set('_t', Date.now());
-      modifiedRequest = new Request(url.toString(), {
-        method: modifiedRequest.method,
-        headers: modifiedRequest.headers,
-        body: modifiedRequest.body,
-        mode: modifiedRequest.mode,
-        credentials: modifiedRequest.credentials
-      });
-    }
-    
-    // Make the actual request
-    let response = await fetch(modifiedRequest);
-    
-    // For Twitter-related resources, always extract tokens
-    await extractTokensFromResponse(response.clone());
-    
-    // For all other Twitter requests, just modify if needed
-    const modifiedResponse = await modifyResponseIfNeeded(response.clone(), true);
-    
-    // Cache the response for future use if not an API call
-    if (!request.url.includes('/api/') && !request.url.includes('graphql')) {
-      cacheResponse(request, modifiedResponse.clone());
-    }
-    
-    return modifiedResponse;
   } catch (error) {
     console.error('Error handling Twitter request:', error);
-    // Try alternative method for Twitter main page
-    if (request.url.includes('twitter.com') || request.url.includes('x.com')) {
-      console.log('Error handling Twitter, using wrapper approach');
-      return generateTwitterWrapperResponse(request.url);
-    }
-    
-    // Fall back to original request
-    return fetch(request);
+    // For any errors with Twitter, use the wrapper approach
+    return generateTwitterWrapperResponse(url);
   }
 }
 

@@ -54,6 +54,8 @@ document.addEventListener('DOMContentLoaded', () => {
             showNotification(event.data.message);
           } else if (event.data.type === 'page-load-status') {
             handlePageLoadStatus(event.data);
+          } else if (event.data.type === 'BYPASS_CLOUDFLARE') {
+            handleBypassCloudflare(event.data);
           }
         });
         
@@ -101,6 +103,8 @@ document.addEventListener('DOMContentLoaded', () => {
       const urlObj = new URL(url);
       if (urlObj.hostname === 'x.com' || urlObj.hostname === 'www.x.com') {
         showNotification('Loading X.com in enhanced mode...');
+      } else if (urlObj.hostname === 'gmgn.ai' || urlObj.hostname === 'www.gmgn.ai') {
+        showNotification('Loading gmgn.ai, bypassing Cloudflare...');
       }
       
       // Set the iframe src to load the page
@@ -121,6 +125,11 @@ document.addEventListener('DOMContentLoaded', () => {
       viewFrame.onload = () => {
         clearTimeout(loadTimeout);
         showLoading(false);
+        
+        // For Cloudflare sites, inject bypass script
+        if (url.includes('gmgn.ai')) {
+          bypassCloudflare(viewFrame);
+        }
         
         // Inform service worker that page loaded successfully - always use mobile view
         if (swRegistration && swRegistration.active) {
@@ -210,6 +219,68 @@ document.addEventListener('DOMContentLoaded', () => {
     setTimeout(() => {
       notification.style.opacity = '0';
     }, duration);
+  }
+
+  // Function to bypass Cloudflare frame-busting
+  function bypassCloudflare(iframe) {
+    try {
+      // This function will attempt to execute in the parent context (panel.js)
+      // to handle frame-busting prevention for the iframe content
+      if (iframe.contentWindow) {
+        // Create a <script> element to be injected
+        const scriptContent = `
+          // This script will try to override the iframe content document
+          // to prevent frame-busting behaviors
+          try {
+            // Watch for when the Cloudflare iframe loads
+            const observer = new MutationObserver(function(mutations) {
+              // Look for Cloudflare verification iframes
+              document.querySelectorAll('iframe[src*="challenges"], .cf-turnstile, iframe[src*="turnstile"]').forEach(el => {
+                console.log('Found Cloudflare element, making visible', el);
+                el.style.display = 'block';
+                el.style.visibility = 'visible';
+                el.style.opacity = '1';
+              });
+            });
+            
+            // Start observing the document with the configured parameters
+            observer.observe(document.body, { 
+              childList: true, 
+              subtree: true,
+              attributes: true
+            });
+            console.log('Cloudflare observer set up');
+          } catch(e) {
+            console.error('Error in Cloudflare prevention:', e);
+          }
+        `;
+        
+        // Wait for iframe to load
+        setTimeout(() => {
+          try {
+            // Attempt to execute script in iframe context
+            if (iframe.contentWindow && iframe.contentDocument) {
+              const script = document.createElement('script');
+              script.textContent = scriptContent;
+              iframe.contentDocument.head.appendChild(script);
+              console.log('Injected Cloudflare bypass script');
+            }
+          } catch (e) {
+            console.log('Could not access iframe content due to CORS (expected):', e);
+          }
+        }, 500);
+      }
+    } catch (e) {
+      console.error('Error in bypassCloudflare:', e);
+    }
+  }
+  
+  // Handle Cloudflare bypass message from service worker
+  function handleBypassCloudflare(data) {
+    console.log('Received bypass Cloudflare instruction:', data);
+    if (viewFrame) {
+      bypassCloudflare(viewFrame);
+    }
   }
 
   // Handle page load status messages from service worker
