@@ -10,42 +10,159 @@ document.addEventListener('DOMContentLoaded', () => {
   const X_URL = 'https://x.com';
   const PMGN_URL = 'https://gmgn.ai/?chain=sol';
   
+  // Flag to track if a load is in progress to prevent multiple concurrent loads
+  let isLoadingInProgress = false;
+  // Max retries for loading
+  const MAX_RETRIES = 3;
+  
   // Function to toggle between iframe sources
-  function toggleIframeSource(showX) {
+  async function toggleIframeSource(showX) {
+    // Prevent multiple toggles at once
+    if (isLoadingInProgress) {
+      return;
+    }
+    
+    isLoadingInProgress = true;
+    
     // Show loading indicator
     showLoading(true);
     
-    if (showX) {
-      // Update button states
-      btnX.classList.add('active');
-      btnPmgn.classList.remove('active');
-      
-      // Change iframe source
-      contentIframe.src = X_URL;
-      showNotification('Loading X.com', false);
-    } else {
-      // Update button states
-      btnPmgn.classList.add('active');
-      btnX.classList.remove('active');
-      
-      // Load gmgn.ai directly
-      loadGmgnDirect();
+    try {
+      if (showX) {
+        // Update button states
+        btnX.classList.add('active');
+        btnPmgn.classList.remove('active');
+        
+        // Pre-notify service worker about the upcoming navigation to ensure rules are activated
+        await notifyServiceWorkerAndWait(X_URL);
+        
+        // Change iframe source
+        loadUrlWithRetry(X_URL, 'Loading X.com');
+      } else {
+        // Update button states
+        btnPmgn.classList.add('active');
+        btnX.classList.remove('active');
+        
+        // Load gmgn.ai with retry
+        await notifyServiceWorkerAndWait(PMGN_URL);
+        loadUrlWithRetry(PMGN_URL, 'Loading pmgn.ai');
+      }
+    } catch (error) {
+      console.error('Error toggling iframe source:', error);
+      showNotification('Error switching content', true);
+      showLoading(false);
+      isLoadingInProgress = false;
     }
   }
   
-  // Function to load gmgn.ai directly
-  function loadGmgnDirect() {
-    showNotification('Loading pmgn.ai', false);
-    
-    // Notify service worker first to prepare for gmgn.ai loading
-    notifyServiceWorker(PMGN_URL);
+  // Function to load URL with retry mechanism
+  async function loadUrlWithRetry(url, loadingMessage, attempt = 1) {
+    showNotification(loadingMessage, false);
     
     // Add cache buster to avoid caching issues
     const cacheBuster = Date.now();
-    const urlWithCacheBuster = `${PMGN_URL}&_cb=${cacheBuster}`;
+    const separator = url.includes('?') ? '&' : '?';
+    const urlWithCacheBuster = `${url}${separator}_cb=${cacheBuster}`;
     
-    // Set iframe source to gmgn.ai directly
+    // Set iframe source
     contentIframe.src = urlWithCacheBuster;
+    
+    // Set up load event for this attempt
+    const loadPromise = new Promise((resolve, reject) => {
+      const loadTimeout = setTimeout(() => {
+        reject(new Error('Loading timed out'));
+      }, 15000);
+      
+      const handleLoad = () => {
+        clearTimeout(loadTimeout);
+        contentIframe.removeEventListener('load', handleLoad);
+        contentIframe.removeEventListener('error', handleError);
+        resolve();
+      };
+      
+      const handleError = (event) => {
+        clearTimeout(loadTimeout);
+        contentIframe.removeEventListener('load', handleLoad);
+        contentIframe.removeEventListener('error', handleError);
+        reject(new Error('Failed to load iframe'));
+      };
+      
+      contentIframe.addEventListener('load', handleLoad, { once: true });
+      contentIframe.addEventListener('error', handleError, { once: true });
+    });
+    
+    try {
+      await loadPromise;
+      console.log(`Successfully loaded ${url}`);
+      showLoading(false);
+      isLoadingInProgress = false;
+      
+      // Apply appropriate handler based on loaded URL
+      if (url.includes('x.com')) {
+        showNotification('Showing X.com', false);
+      } else if (url.includes('gmgn.ai')) {
+        showNotification('Showing pmgn.ai', false);
+        // Try to bypass Cloudflare
+        bypassCloudflare();
+      }
+    } catch (error) {
+      console.warn(`Load attempt ${attempt} for ${url} failed:`, error);
+      
+      if (attempt < MAX_RETRIES) {
+        // Retry with backoff
+        const backoffDelay = 500 * attempt; // Incremental backoff
+        showNotification(`Retrying... (${attempt}/${MAX_RETRIES})`, false);
+        
+        // Refresh rules before retrying
+        await notifyServiceWorkerAndWait(url);
+        
+        setTimeout(() => {
+          loadUrlWithRetry(url, loadingMessage, attempt + 1);
+        }, backoffDelay);
+      } else {
+        // Max retries reached, show error
+        console.error(`Failed to load ${url} after ${MAX_RETRIES} attempts`);
+        showNotification(`Failed to load ${url.includes('x.com') ? 'X.com' : 'pmgn.ai'}`, true);
+        showLoading(false);
+        isLoadingInProgress = false;
+      }
+    }
+  }
+  
+  // Function to notify service worker and wait for confirmation
+  async function notifyServiceWorkerAndWait(url) {
+    return new Promise((resolve) => {
+      if (navigator.serviceWorker && navigator.serviceWorker.controller) {
+        // Create a unique message ID for this request
+        const messageId = Date.now().toString();
+        
+        // Set up one-time listener for response
+        const handleMessage = (event) => {
+          if (event.data && event.data.type === 'RULES_READY' && event.data.messageId === messageId) {
+            navigator.serviceWorker.removeEventListener('message', handleMessage);
+            resolve();
+          }
+        };
+        
+        navigator.serviceWorker.addEventListener('message', handleMessage);
+        
+        // Send message to service worker
+        navigator.serviceWorker.controller.postMessage({
+          type: 'PREPARE_URL',
+          url: url,
+          messageId: messageId
+        });
+        
+        // Resolve after timeout in case service worker doesn't respond
+        setTimeout(() => {
+          navigator.serviceWorker.removeEventListener('message', handleMessage);
+          resolve();
+        }, 500);
+      } else {
+        // No service worker, resolve immediately
+        resolve();
+      }
+    });
   }
   
   // Show/hide loading indicator
@@ -144,38 +261,7 @@ document.addEventListener('DOMContentLoaded', () => {
     });
   }
   
-  // Handle iframe loading events
-  contentIframe.addEventListener('load', () => {
-    showLoading(false);
-    
-    // Show appropriate notification based on current src
-    if (contentIframe.src.includes('x.com')) {
-      showNotification('Showing X.com', false);
-    } else if (contentIframe.src.includes('gmgn.ai')) {
-      showNotification('Showing pmgn.ai', false);
-      // Try to bypass Cloudflare
-      bypassCloudflare();
-    }
-  });
-  
-  // Add error event handler
-  contentIframe.addEventListener('error', () => {
-    showLoading(false);
-    
-    // Show appropriate error notification based on current src
-    if (contentIframe.src.includes('x.com')) {
-      showNotification('Failed to load X.com', true);
-    } else if (contentIframe.src.includes('gmgn.ai')) {
-      showNotification('Failed to load pmgn.ai', true);
-    } else {
-      showNotification('Failed to load content', true);
-    }
-  });
-  
-  // Initialize with a notification
-  showNotification('Showing X.com', false);
-  
-  // Function to notify the service worker when a URL is loaded
+  // Function to notify the service worker about any URL
   function notifyServiceWorker(url) {
     if (navigator.serviceWorker && navigator.serviceWorker.controller) {
       navigator.serviceWorker.controller.postMessage({
@@ -184,12 +270,6 @@ document.addEventListener('DOMContentLoaded', () => {
       });
     }
   }
-  
-  // Add handler for iframe navigation
-  contentIframe.addEventListener('load', () => {
-    // Notify service worker of loaded URL for possible Cloudflare handling
-    notifyServiceWorker(contentIframe.src);
-  });
   
   // Set up service worker message listener
   navigator.serviceWorker.addEventListener('message', (event) => {
@@ -200,6 +280,9 @@ document.addEventListener('DOMContentLoaded', () => {
       bypassCloudflare();
     }
   });
+  
+  // Initialize with a notification
+  showNotification('Showing X.com', false);
   
   // Debug message to confirm panel script initialized
   console.log('Panel script initialized');

@@ -309,9 +309,12 @@ self.addEventListener('activate', (event) => {
 
 // Listen for messages from panel.js
 self.addEventListener('message', async (event) => {
-  if (event.data && event.data.type === 'LOAD_URL') {
+  // Handle URL loading messages
+  if (event.data && (event.data.type === 'LOAD_URL' || event.data.type === 'PREPARE_URL')) {
     const url = event.data.url;
-    console.log('Service worker received LOAD_URL message:', url);
+    const messageId = event.data.messageId;  // Will be undefined for LOAD_URL messages
+    
+    console.log(`Service worker received ${event.data.type} message:`, url);
     
     try {
       const parsedUrl = new URL(url);
@@ -346,9 +349,26 @@ self.addEventListener('message', async (event) => {
             console.error('Error finding clients:', err);
           }
         }
+        
+        // If this was a PREPARE_URL message, send response that rules are ready
+        if (event.data.type === 'PREPARE_URL' && messageId && event.source) {
+          console.log('Sending RULES_READY response for messageId:', messageId);
+          event.source.postMessage({
+            type: 'RULES_READY',
+            messageId: messageId
+          });
+        }
       }
     } catch (e) {
       console.error('Error parsing URL:', e);
+      
+      // Still send response if it was a PREPARE_URL message
+      if (event.data.type === 'PREPARE_URL' && messageId && event.source) {
+        event.source.postMessage({
+          type: 'RULES_READY',
+          messageId: messageId
+        });
+      }
     }
   }
 });
