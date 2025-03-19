@@ -36,65 +36,17 @@
       z-index: 100;
     }
 
-    .url-container {
+    .button-container {
       display: flex;
-      position: relative;
-      align-items: center;
-      gap: 8px;
-    }
-
-    .input-wrapper {
-      position: relative;
-      flex: 1;
-    }
-
-    .url-input {
-      width: 100%;
-      padding: 10px 36px 10px 12px;
-      border: 1px solid var(--border-color);
-      border-radius: 20px;
-      font-size: 16px;
-      outline: none;
-      transition: all 0.2s ease;
-      box-sizing: border-box;
-    }
-
-    .url-input:focus {
-      border-color: var(--primary-color);
-      box-shadow: 0 0 0 2px rgba(29, 161, 242, 0.3);
-    }
-
-    .clear-btn {
-      position: absolute;
-      right: 8px;
-      top: 50%;
-      transform: translateY(-50%);
-      background: none;
-      border: none;
-      color: #657786;
-      cursor: pointer;
-      display: none;
-      width: 24px;
-      height: 24px;
-      border-radius: 50%;
-      align-items: center;
       justify-content: center;
-      z-index: 5;
+      gap: 16px;
+      padding: 6px 0;
     }
 
-    .clear-btn:hover {
-      background-color: rgba(101, 119, 134, 0.1);
-    }
-
-    .actions {
-      display: flex;
-      gap: 8px;
-    }
-
-    .btn {
+    .toggle-btn {
       padding: 8px 16px;
-      background-color: var(--primary-color);
-      color: white;
+      background-color: #EFF3F4;
+      color: var(--text-color);
       border: none;
       border-radius: 20px;
       cursor: pointer;
@@ -103,17 +55,13 @@
       white-space: nowrap;
     }
 
-    .btn:hover {
-      background-color: #1A91DA;
-    }
-
-    .btn-secondary {
-      background-color: #EFF3F4;
-      color: var(--text-color);
-    }
-
-    .btn-secondary:hover {
+    .toggle-btn:hover {
       background-color: #E1E8ED;
+    }
+
+    .toggle-btn.active {
+      background-color: var(--primary-color);
+      color: white;
     }
 
     .content {
@@ -129,7 +77,6 @@
       /* Mobile viewport simulation */
       max-width: 100%;
       margin: 0 auto;
-      display: block;
     }
 
     .loading-indicator {
@@ -207,20 +154,15 @@
 </head>
 <body>
   <div class="header">
-    <div class="url-container">
-      <div class="input-wrapper">
-        <input type="text" id="url-input" class="url-input" placeholder="Enter website URL..." />
-        <button id="clear-button" class="clear-btn">✕</button>
-      </div>
-      <div class="actions">
-        <button id="load-button" class="btn">Go</button>
-        <button id="refresh-button" class="btn btn-secondary">Refresh</button>
-      </div>
+    <div class="button-container">
+      <button id="btn-x" class="toggle-btn active">X</button>
+      <button id="btn-pmgn" class="toggle-btn">pmgn.ai</button>
     </div>
   </div>
 
   <div class="content">
-    <iframe id="view-frame" src="https://x.com"></iframe>
+    <!-- Single iframe that will load different sources -->
+    <iframe id="content-iframe" src="https://x.com"></iframe>
     
     <div id="loading-indicator" class="loading-indicator" style="display: none;">
       <div class="loading-content">
