@@ -6,6 +6,21 @@ const CLOUDFLARE_DOMAINS = [
   'dextools.io'
 ];
 
+// Define Twitter/X domains
+const TWITTER_DOMAINS = [
+  'twitter.com',
+  'www.twitter.com',
+  'x.com',
+  'www.x.com',
+  'mobile.twitter.com',
+  'mobile.x.com',
+  'abs.twimg.com',
+  'pbs.twimg.com',
+  'video.twimg.com',
+  'api.twitter.com',
+  'api.x.com'
+];
+
 // Browser user agents
 const MOBILE_USER_AGENT = 'Mozilla/5.0 (iPhone; CPU iPhone OS 15_0 like Mac OS X) AppleWebKit/605.1.15 (KHTML, like Gecko) Version/15.0 Mobile/15E148 Safari/604.1';
 const DESKTOP_USER_AGENT = 'Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/122.0.0.0 Safari/537.36';
@@ -21,17 +36,17 @@ const HEADERS_TO_REMOVE = [
   'cross-origin-resource-policy'
 ];
 
-// Add a function to initialize Cloudflare bypass rules
-async function initializeCloudflareBypassRules() {
+// Initialize all header modification rules
+async function initializeHeaderRules() {
   try {
-    console.log('Setting up Cloudflare bypass rules');
+    console.log('Setting up header modification rules');
     
     // Remove any existing rules first
     await chrome.declarativeNetRequest.updateSessionRules({
-      removeRuleIds: [1, 2, 3, 4, 5]
+      removeRuleIds: [1, 2, 3, 4, 5, 6, 7, 8]
     });
     
-    // Add rules for Cloudflare-protected domains
+    // Add rules
     await chrome.declarativeNetRequest.updateSessionRules({
       addRules: [
         // Rule 1: Higher priority rule specifically for gmgn.ai
@@ -64,6 +79,7 @@ async function initializeCloudflareBypassRules() {
             ]
           }
         },
+        
         // Rule 2: Remove security headers for all Cloudflare domains
         {
           id: 2,
@@ -84,6 +100,7 @@ async function initializeCloudflareBypassRules() {
             ]
           }
         },
+        
         // Rule 3: Set Desktop UA for Cloudflare domains
         {
           id: 3,
@@ -115,6 +132,7 @@ async function initializeCloudflareBypassRules() {
             ]
           }
         },
+        
         // Rule 4: Add Access-Control-Allow-Origin header for Cloudflare domains
         {
           id: 4,
@@ -138,6 +156,7 @@ async function initializeCloudflareBypassRules() {
             ]
           }
         },
+        
         // Rule 5: Add header that helps with Cloudflare detection
         {
           id: 5,
@@ -164,21 +183,120 @@ async function initializeCloudflareBypassRules() {
               chrome.declarativeNetRequest.ResourceType.SUB_FRAME
             ]
           }
+        },
+        
+        // Rule 6: Highest priority rule for removing security headers from X.com/Twitter
+        {
+          id: 6,
+          priority: 9999, // Extremely high priority specifically for Twitter/X
+          action: {
+            type: chrome.declarativeNetRequest.RuleActionType.MODIFY_HEADERS,
+            responseHeaders: [
+              {
+                header: "X-Frame-Options",
+                operation: chrome.declarativeNetRequest.HeaderOperation.REMOVE
+              },
+              {
+                header: "x-frame-options",
+                operation: chrome.declarativeNetRequest.HeaderOperation.REMOVE
+              },
+              {
+                header: "Content-Security-Policy",
+                operation: chrome.declarativeNetRequest.HeaderOperation.REMOVE
+              },
+              {
+                header: "content-security-policy",
+                operation: chrome.declarativeNetRequest.HeaderOperation.REMOVE
+              },
+              {
+                header: "Frame-Options",
+                operation: chrome.declarativeNetRequest.HeaderOperation.REMOVE
+              },
+              {
+                header: "frame-options",
+                operation: chrome.declarativeNetRequest.HeaderOperation.REMOVE
+              }
+            ]
+          },
+          condition: {
+            domains: TWITTER_DOMAINS,
+            resourceTypes: [
+              chrome.declarativeNetRequest.ResourceType.MAIN_FRAME,
+              chrome.declarativeNetRequest.ResourceType.SUB_FRAME,
+              chrome.declarativeNetRequest.ResourceType.XMLHTTPREQUEST
+            ]
+          }
+        },
+        
+        // Rule 7: X.com with specific URL filter pattern (another way to target X.com)
+        {
+          id: 7,
+          priority: 9999,
+          action: {
+            type: chrome.declarativeNetRequest.RuleActionType.MODIFY_HEADERS,
+            responseHeaders: [
+              {
+                header: "X-Frame-Options",
+                operation: chrome.declarativeNetRequest.HeaderOperation.REMOVE
+              },
+              {
+                header: "Content-Security-Policy",
+                operation: chrome.declarativeNetRequest.HeaderOperation.REMOVE
+              }
+            ]
+          },
+          condition: {
+            urlFilter: "*://*.x.com/*|*://x.com/*|*://*.twitter.com/*|*://twitter.com/*",
+            resourceTypes: [
+              chrome.declarativeNetRequest.ResourceType.MAIN_FRAME,
+              chrome.declarativeNetRequest.ResourceType.SUB_FRAME,
+              chrome.declarativeNetRequest.ResourceType.XMLHTTPREQUEST
+            ]
+          }
+        },
+        
+        // Rule 8: Set Mobile UA for X.com/Twitter
+        {
+          id: 8,
+          priority: 1000,
+          action: {
+            type: chrome.declarativeNetRequest.RuleActionType.MODIFY_HEADERS,
+            requestHeaders: [
+              {
+                header: "User-Agent",
+                operation: chrome.declarativeNetRequest.HeaderOperation.SET,
+                value: MOBILE_USER_AGENT
+              },
+              {
+                header: "Sec-Fetch-Dest",
+                operation: chrome.declarativeNetRequest.HeaderOperation.SET,
+                value: "document"
+              }
+            ]
+          },
+          condition: {
+            domains: TWITTER_DOMAINS,
+            resourceTypes: [
+              chrome.declarativeNetRequest.ResourceType.MAIN_FRAME,
+              chrome.declarativeNetRequest.ResourceType.SUB_FRAME,
+              chrome.declarativeNetRequest.ResourceType.XMLHTTPREQUEST
+            ]
+          }
         }
       ]
     });
     
-    console.log('Cloudflare bypass rules set up successfully');
+    console.log('Header modification rules set up successfully');
   } catch (error) {
-    console.error('Failed to set up Cloudflare bypass rules:', error);
+    console.error('Failed to set up header rules:', error);
   }
 }
 
-// Initialize the service worker with Cloudflare bypass rules
+// Initialize the service worker with header rules
 self.addEventListener('install', (event) => {
   console.log('Service worker installing');
-  // Initialize Cloudflare bypass rules
-  event.waitUntil(initializeCloudflareBypassRules());
+  // Initialize header rules
+  event.waitUntil(initializeHeaderRules());
   // Skip waiting to activate immediately
   self.skipWaiting();
 });
@@ -195,34 +313,38 @@ self.addEventListener('message', async (event) => {
     const url = event.data.url;
     console.log('Service worker received LOAD_URL message:', url);
     
-    // Check if URL is for gmgn.ai 
     try {
       const parsedUrl = new URL(url);
-      if (parsedUrl.hostname.includes('gmgn.ai')) {
-        console.log('gmgn.ai URL detected, refreshing rules');
-        // Refresh rules when loading gmgn.ai
-        await initializeCloudflareBypassRules();
+      
+      // For both gmgn.ai and x.com, refresh rules
+      if (parsedUrl.hostname.includes('gmgn.ai') || 
+          TWITTER_DOMAINS.some(domain => parsedUrl.hostname.includes(domain))) {
+        console.log('Special site detected, refreshing rules');
+        // Refresh rules
+        await initializeHeaderRules();
         
-        // Try to find active client (tab) to inject frame-busting prevention script
-        try {
-          const allClients = await clients.matchAll({
-            includeUncontrolled: true,
-            type: 'window'
-          });
-          
-          for (const client of allClients) {
-            console.log('Found client:', client.url);
-            if (client.url.includes(chrome.runtime.id)) {
-              console.log('Found extension client, sending bypass instruction');
-              client.postMessage({
-                type: 'BYPASS_CLOUDFLARE',
-                url: url
-              });
-              break;
+        // Try to find active client (tab) to inject frame-busting prevention script for CloudFlare
+        if (parsedUrl.hostname.includes('gmgn.ai')) {
+          try {
+            const allClients = await clients.matchAll({
+              includeUncontrolled: true,
+              type: 'window'
+            });
+            
+            for (const client of allClients) {
+              console.log('Found client:', client.url);
+              if (client.url.includes(chrome.runtime.id)) {
+                console.log('Found extension client, sending bypass instruction');
+                client.postMessage({
+                  type: 'BYPASS_CLOUDFLARE',
+                  url: url
+                });
+                break;
+              }
             }
+          } catch (err) {
+            console.error('Error finding clients:', err);
           }
-        } catch (err) {
-          console.error('Error finding clients:', err);
         }
       }
     } catch (e) {
@@ -234,6 +356,11 @@ self.addEventListener('message', async (event) => {
 // Function to detect Cloudflare-protected sites
 function isCloudflareProtectedSite(hostname) {
   return CLOUDFLARE_DOMAINS.some(domain => hostname.includes(domain));
+}
+
+// Function to detect Twitter/X domains
+function isTwitterSite(hostname) {
+  return TWITTER_DOMAINS.some(domain => hostname.includes(domain));
 }
 
 // Fetch event listener to intercept requests and modify them
@@ -254,6 +381,13 @@ self.addEventListener('fetch', (event) => {
       
       // Cloudflare-specific handling
       event.respondWith(handleCloudflareRequest(event, url));
+    }
+    // Check if this is a Twitter/X site
+    else if (isTwitterSite(parsedUrl.hostname)) {
+      console.log('Intercepting Twitter/X site request:', parsedUrl.hostname);
+      
+      // Twitter-specific handling
+      event.respondWith(handleTwitterRequest(event, url));
     }
   } catch (e) {
     console.error('Error in fetch handler:', e);
@@ -390,6 +524,60 @@ async function handleCloudflareRequest(event, url) {
     });
   } catch (error) {
     console.error('Error handling Cloudflare request:', error);
+    return new Response('Error loading content', { status: 500 });
+  }
+}
+
+// Handle Twitter/X requests
+async function handleTwitterRequest(event, url) {
+  try {
+    // Create a modified request with mobile user agent
+    const modifiedHeaders = new Headers(event.request.headers);
+    modifiedHeaders.set('User-Agent', MOBILE_USER_AGENT);
+    modifiedHeaders.set('Sec-Fetch-Dest', 'document');
+    modifiedHeaders.set('Sec-Fetch-Mode', 'navigate');
+    modifiedHeaders.set('Sec-Fetch-Site', 'none');
+    modifiedHeaders.set('Accept', 'text/html,application/xhtml+xml,application/xml;q=0.9,image/webp,*/*;q=0.8');
+    modifiedHeaders.set('Accept-Language', 'en-US,en;q=0.5');
+    
+    // Create new request with modified headers
+    const modifiedRequest = new Request(url, {
+      method: event.request.method,
+      headers: modifiedHeaders,
+      body: event.request.body,
+      mode: 'cors',
+      credentials: 'include',
+      redirect: 'follow'
+    });
+    
+    // Fetch with modified request
+    const response = await fetch(modifiedRequest);
+    
+    // For all responses, remove security headers
+    const newHeaders = new Headers(response.headers);
+    
+    // Remove all security headers
+    for (const header of HEADERS_TO_REMOVE) {
+      newHeaders.delete(header);
+    }
+    
+    // Explicitly remove problematic headers with different case patterns
+    newHeaders.delete('X-Frame-Options');
+    newHeaders.delete('x-frame-options');
+    newHeaders.delete('Content-Security-Policy');
+    newHeaders.delete('content-security-policy');
+    
+    // Add permissive headers
+    newHeaders.set('Access-Control-Allow-Origin', '*');
+    newHeaders.set('X-Frame-Options-Modified', 'true');
+    
+    return new Response(response.body, {
+      status: response.status,
+      statusText: response.statusText,
+      headers: newHeaders
+    });
+  } catch (error) {
+    console.error('Error handling Twitter request:', error);
     return new Response('Error loading content', { status: 500 });
   }
 } 
