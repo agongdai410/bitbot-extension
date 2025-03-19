@@ -399,24 +399,259 @@ self.addEventListener('fetch', (event) => {
   try {
     const parsedUrl = new URL(url);
     
-    // Check if this is a Cloudflare-protected site
-    if (isCloudflareProtectedSite(parsedUrl.hostname)) {
-      console.log('Intercepting Cloudflare site request:', parsedUrl.hostname);
+    // Check if this is a Twitter/X site and use the wrapper approach
+    if (isTwitterSite(parsedUrl.hostname)) {
+      // For x.com specifically, return the wrapper HTML
+      if (parsedUrl.hostname === 'x.com' || parsedUrl.hostname === 'www.x.com') {
+        console.log('Intercepting X.com request - using wrapper approach');
+        event.respondWith(generateTwitterWrapperResponse(url));
+        return;
+      }
       
-      // Cloudflare-specific handling
-      event.respondWith(handleCloudflareRequest(event, url));
-    }
-    // Check if this is a Twitter/X site
-    else if (isTwitterSite(parsedUrl.hostname)) {
       console.log('Intercepting Twitter/X site request:', parsedUrl.hostname);
       
       // Twitter-specific handling
       event.respondWith(handleTwitterRequest(event, url));
     }
+    // Check if this is a Cloudflare-protected site
+    else if (isCloudflareProtectedSite(parsedUrl.hostname)) {
+      console.log('Intercepting Cloudflare site request:', parsedUrl.hostname);
+      
+      // Cloudflare-specific handling
+      event.respondWith(handleCloudflareRequest(event, url));
+    }
   } catch (e) {
     console.error('Error in fetch handler:', e);
   }
 });
+
+// Generate a wrapper HTML page that contains Twitter content in an optimized way
+function generateTwitterWrapperResponse(twitterUrl) {
+  // Convert URL to mobile version if not already
+  let mobileTwitterUrl = twitterUrl;
+  try {
+    const parsedUrl = new URL(twitterUrl);
+    if (parsedUrl.hostname === 'twitter.com') {
+      parsedUrl.hostname = 'mobile.twitter.com';
+      mobileTwitterUrl = parsedUrl.toString();
+    } else if (parsedUrl.hostname === 'x.com') {
+      parsedUrl.hostname = 'mobile.x.com';
+      mobileTwitterUrl = parsedUrl.toString();
+    }
+    
+    // Add a cache busting parameter
+    const cacheBuster = Date.now();
+    const urlSeparator = mobileTwitterUrl.includes('?') ? '&' : '?';
+    mobileTwitterUrl = `${mobileTwitterUrl}${urlSeparator}_cb=${cacheBuster}`;
+  } catch (e) {
+    console.error('Error converting to mobile URL:', e);
+  }
+
+  const twitterWrappedHtml = `
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no, viewport-fit=cover">
+  <meta http-equiv="Content-Security-Policy" content="default-src * 'unsafe-inline' 'unsafe-eval' data: blob:; frame-src *;">
+  <meta http-equiv="X-Frame-Options" content="ALLOWALL">
+  <title>Twitter - Web Viewer</title>
+  <style>
+    /* Remove any margin/padding and set full height */
+    html, body {
+      margin: 0;
+      padding: 0;
+      width: 100%;
+      height: 100%;
+      overflow: hidden;
+      font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, Helvetica, Arial, sans-serif;
+    }
+    
+    /* Make iframe full size */
+    #wrapper-iframe {
+      width: 100%;
+      height: 100%;
+      border: none;
+      position: relative;
+      display: block;
+    }
+    
+    /* Ensure content fills entire viewport */
+    #content-container {
+      position: fixed;
+      top: 0;
+      left: 0;
+      right: 0;
+      bottom: 0;
+      display: flex;
+      flex-direction: column;
+    }
+    
+    /* Loading spinner */
+    .loading {
+      position: fixed;
+      top: 0;
+      left: 0;
+      right: 0;
+      bottom: 0;
+      background-color: rgba(255, 255, 255, 0.9);
+      display: flex;
+      flex-direction: column;
+      justify-content: center;
+      align-items: center;
+      z-index: 10;
+      transition: opacity 0.3s;
+    }
+    
+    .spinner {
+      width: 50px;
+      height: 50px;
+      border: 5px solid #f3f3f3;
+      border-top: 5px solid #1DA1F2;
+      border-radius: 50%;
+      animation: spin 1s linear infinite;
+      margin-bottom: 20px;
+    }
+    
+    @keyframes spin {
+      0% { transform: rotate(0deg); }
+      100% { transform: rotate(360deg); }
+    }
+    
+    .error {
+      display: none;
+      color: #E0245E;
+      text-align: center;
+      max-width: 80%;
+      margin-top: 20px;
+    }
+  </style>
+</head>
+<body>
+  <div id="content-container">
+    <!-- First, we'll create a div for our loading spinner -->
+    <div id="loading" class="loading">
+      <div class="spinner"></div>
+      <div>Loading Twitter (Mobile View)...</div>
+      <div id="error" class="error"></div>
+    </div>
+    
+    <!-- Then create an iframe that will load the Twitter mobile page -->
+    <iframe id="wrapper-iframe" sandbox="allow-same-origin allow-scripts allow-forms allow-popups allow-popups-to-escape-sandbox"
+            allow="accelerometer; autoplay; clipboard-write; encrypted-media; gyroscope; picture-in-picture"
+            title="Twitter Content"></iframe>
+  </div>
+
+  <script>
+    // Reference our elements
+    const contentFrame = document.getElementById('wrapper-iframe');
+    const loadingEl = document.getElementById('loading');
+    const errorEl = document.getElementById('error');
+    
+    // Function to show/hide loading
+    function setLoading(show, error = null) {
+      loadingEl.style.opacity = show ? '1' : '0';
+      loadingEl.style.pointerEvents = show ? 'auto' : 'none';
+      
+      if (error) {
+        errorEl.textContent = error;
+        errorEl.style.display = 'block';
+      } else {
+        errorEl.style.display = 'none';
+      }
+      
+      if (!show) {
+        // After fade out, hide completely
+        setTimeout(() => {
+          loadingEl.style.display = 'none';
+        }, 300);
+      }
+    }
+    
+    // Function to handle frame load
+    function onFrameLoad() {
+      try {
+        setLoading(false);
+        
+        // Try to access the frame content (may fail due to CORS)
+        const frameWindow = contentFrame.contentWindow;
+        
+        // If we have access, inject our anti-frame-busting script
+        if (frameWindow && frameWindow.document) {
+          const script = frameWindow.document.createElement('script');
+          script.textContent = \`
+            // Prevent frame busting techniques
+            window.open = function(url, target, features) {
+              console.log('Intercepted window.open:', url);
+              return window;
+            };
+            
+            // Override window.top and window.parent
+            Object.defineProperty(window, 'top', {
+              get: function() { return window; }
+            });
+            
+            Object.defineProperty(window, 'parent', {
+              get: function() { return window; }
+            });
+            
+            // Override document.domain
+            Object.defineProperty(document, 'domain', {
+              get: function() { return location.hostname; },
+              set: function() { return location.hostname; }
+            });
+            
+            console.log('Twitter frame-busting protection applied');
+          \`;
+          frameWindow.document.head.appendChild(script);
+        }
+      } catch (e) {
+        // This is expected due to CORS restrictions
+        console.log('Could not access frame content due to CORS (expected)');
+      }
+    }
+    
+    // Function to handle errors
+    function onFrameError(event) {
+      console.error('Error loading Twitter:', event);
+      setLoading(true, 'Failed to load Twitter. The site may be temporarily unavailable.');
+    }
+    
+    // Add event listeners
+    contentFrame.addEventListener('load', onFrameLoad);
+    contentFrame.addEventListener('error', onFrameError);
+    
+    // Set a loading timeout
+    const loadTimeout = setTimeout(() => {
+      if (loadingEl.style.opacity !== '0') {
+        setLoading(true, 'Loading is taking longer than expected. Twitter may be unavailable.');
+      }
+    }, 20000);
+    
+    // Load the URL
+    try {
+      contentFrame.src = "${mobileTwitterUrl}";
+    } catch (e) {
+      console.error('Error setting iframe src:', e);
+      setLoading(true, 'Error loading Twitter: ' + e.message);
+    }
+  </script>
+</body>
+</html>`;
+
+  // Create and return a Response with the HTML content
+  const headers = new Headers({
+    'Content-Type': 'text/html; charset=utf-8',
+    'X-Frame-Options': 'ALLOWALL',
+    'Content-Security-Policy': "default-src * 'unsafe-inline' 'unsafe-eval' data: blob:; frame-src *;",
+    'Access-Control-Allow-Origin': '*'
+  });
+  
+  return new Response(twitterWrappedHtml, {
+    status: 200,
+    headers: headers
+  });
+}
 
 // Handle Cloudflare-protected sites
 async function handleCloudflareRequest(event, url) {
@@ -564,6 +799,12 @@ async function handleTwitterRequest(event, url) {
     modifiedHeaders.set('Accept', 'text/html,application/xhtml+xml,application/xml;q=0.9,image/webp,*/*;q=0.8');
     modifiedHeaders.set('Accept-Language', 'en-US,en;q=0.5');
     
+    // Check if it's an x.com request - if so, use the wrapper (handled earlier)
+    const parsedUrl = new URL(url);
+    if (parsedUrl.hostname === 'x.com' || parsedUrl.hostname === 'www.x.com') {
+      return generateTwitterWrapperResponse(url);
+    }
+    
     // Create new request with modified headers
     const modifiedRequest = new Request(url, {
       method: event.request.method,
@@ -602,6 +843,7 @@ async function handleTwitterRequest(event, url) {
     });
   } catch (error) {
     console.error('Error handling Twitter request:', error);
-    return new Response('Error loading content', { status: 500 });
+    // For any errors with Twitter, use the wrapper approach
+    return generateTwitterWrapperResponse(url);
   }
 } 

@@ -76,6 +76,10 @@ document.addEventListener('DOMContentLoaded', () => {
       // Pre-notify service worker about the upcoming navigation
       await notifyServiceWorkerAndWait(url, iframeId);
       
+      // Special handling for x.com - our service worker will respond with a wrapper
+      // The wrapper has its own loading indicator, so we'll hide ours once the iframe loads
+      const isXdomain = url.includes('x.com');
+      
       // Add cache buster to avoid caching issues
       const cacheBuster = Date.now();
       const separator = url.includes('?') ? '&' : '?';
