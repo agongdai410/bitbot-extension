@@ -3,7 +3,9 @@ document.addEventListener('DOMContentLoaded', () => {
   // Get DOM elements
   const btnX = document.getElementById('btn-x');
   const btnPmgn = document.getElementById('btn-pmgn');
-  const contentIframe = document.getElementById('content-iframe');
+  const btnRefresh = document.getElementById('btn-refresh');
+  const iframeX = document.getElementById('iframe-x');
+  const iframeGmgn = document.getElementById('iframe-gmgn');
   const loadingIndicator = document.getElementById('loading-indicator');
   
   // URLs for the iframe sources
@@ -14,86 +16,104 @@ document.addEventListener('DOMContentLoaded', () => {
   let isLoadingInProgress = false;
   // Max retries for loading
   const MAX_RETRIES = 3;
+  // Track current active iframe
+  let currentActiveIframe = 'x';
   
-  // Function to toggle between iframe sources
+  // Function to toggle between iframes
   async function toggleIframeSource(showX) {
-    // Prevent multiple toggles at once
+    // No need to toggle if already on the selected iframe
+    if ((showX && currentActiveIframe === 'x') ||
+        (!showX && currentActiveIframe === 'gmgn')) {
+      return;
+    }
+    
+    // Update button states
+    if (showX) {
+      btnX.classList.add('active');
+      btnPmgn.classList.remove('active');
+      
+      // Show X iframe, hide GMGN iframe
+      iframeX.classList.add('active');
+      iframeGmgn.classList.remove('active');
+      currentActiveIframe = 'x';
+      
+      // If X iframe hasn't been loaded yet, load it
+      if (!iframeX.getAttribute('data-loaded')) {
+        await loadIframe(iframeX, X_URL, 'Loading X.com', 'x');
+      } else {
+        showNotification('Showing X.com', false);
+      }
+    } else {
+      btnPmgn.classList.add('active');
+      btnX.classList.remove('active');
+      
+      // Show GMGN iframe, hide X iframe
+      iframeGmgn.classList.add('active');
+      iframeX.classList.remove('active');
+      currentActiveIframe = 'gmgn';
+      
+      // If GMGN iframe hasn't been loaded yet, load it
+      if (!iframeGmgn.getAttribute('data-loaded')) {
+        await loadIframe(iframeGmgn, PMGN_URL, 'Loading pmgn.ai', 'gmgn');
+      } else {
+        showNotification('Showing pmgn.ai', false);
+      }
+    }
+  }
+  
+  // Function to load an iframe
+  async function loadIframe(iframe, url, loadingMessage, iframeId, attempt = 1) {
+    // Prevent multiple loads at once
     if (isLoadingInProgress) {
       return;
     }
     
     isLoadingInProgress = true;
-    
-    // Show loading indicator
     showLoading(true);
-    
-    try {
-      if (showX) {
-        // Update button states
-        btnX.classList.add('active');
-        btnPmgn.classList.remove('active');
-        
-        // Pre-notify service worker about the upcoming navigation to ensure rules are activated
-        await notifyServiceWorkerAndWait(X_URL);
-        
-        // Change iframe source
-        loadUrlWithRetry(X_URL, 'Loading X.com');
-      } else {
-        // Update button states
-        btnPmgn.classList.add('active');
-        btnX.classList.remove('active');
-        
-        // Load gmgn.ai with retry
-        await notifyServiceWorkerAndWait(PMGN_URL);
-        loadUrlWithRetry(PMGN_URL, 'Loading pmgn.ai');
-      }
-    } catch (error) {
-      console.error('Error toggling iframe source:', error);
-      showNotification('Error switching content', true);
-      showLoading(false);
-      isLoadingInProgress = false;
-    }
-  }
-  
-  // Function to load URL with retry mechanism
-  async function loadUrlWithRetry(url, loadingMessage, attempt = 1) {
     showNotification(loadingMessage, false);
     
-    // Add cache buster to avoid caching issues
-    const cacheBuster = Date.now();
-    const separator = url.includes('?') ? '&' : '?';
-    const urlWithCacheBuster = `${url}${separator}_cb=${cacheBuster}`;
-    
-    // Set iframe source
-    contentIframe.src = urlWithCacheBuster;
-    
-    // Set up load event for this attempt
-    const loadPromise = new Promise((resolve, reject) => {
-      const loadTimeout = setTimeout(() => {
-        reject(new Error('Loading timed out'));
-      }, 15000);
-      
-      const handleLoad = () => {
-        clearTimeout(loadTimeout);
-        contentIframe.removeEventListener('load', handleLoad);
-        contentIframe.removeEventListener('error', handleError);
-        resolve();
-      };
-      
-      const handleError = (event) => {
-        clearTimeout(loadTimeout);
-        contentIframe.removeEventListener('load', handleLoad);
-        contentIframe.removeEventListener('error', handleError);
-        reject(new Error('Failed to load iframe'));
-      };
-      
-      contentIframe.addEventListener('load', handleLoad, { once: true });
-      contentIframe.addEventListener('error', handleError, { once: true });
-    });
-    
     try {
+      // Pre-notify service worker about the upcoming navigation
+      await notifyServiceWorkerAndWait(url, iframeId);
+      
+      // Add cache buster to avoid caching issues
+      const cacheBuster = Date.now();
+      const separator = url.includes('?') ? '&' : '?';
+      const urlWithCacheBuster = `${url}${separator}_cb=${cacheBuster}`;
+      
+      // Set iframe source
+      iframe.src = urlWithCacheBuster;
+      
+      // Set up load event for this attempt
+      const loadPromise = new Promise((resolve, reject) => {
+        const loadTimeout = setTimeout(() => {
+          reject(new Error('Loading timed out'));
+        }, 15000);
+        
+        const handleLoad = () => {
+          clearTimeout(loadTimeout);
+          iframe.removeEventListener('load', handleLoad);
+          iframe.removeEventListener('error', handleError);
+          resolve();
+        };
+        
+        const handleError = (event) => {
+          clearTimeout(loadTimeout);
+          iframe.removeEventListener('load', handleLoad);
+          iframe.removeEventListener('error', handleError);
+          reject(new Error('Failed to load iframe'));
+        };
+        
+        iframe.addEventListener('load', handleLoad, { once: true });
+        iframe.addEventListener('error', handleError, { once: true });
+      });
+      
       await loadPromise;
       console.log(`Successfully loaded ${url}`);
+      
+      // Mark iframe as loaded
+      iframe.setAttribute('data-loaded', 'true');
+      
       showLoading(false);
       isLoadingInProgress = false;
       
@@ -103,7 +123,7 @@ document.addEventListener('DOMContentLoaded', () => {
       } else if (url.includes('gmgn.ai')) {
         showNotification('Showing pmgn.ai', false);
         // Try to bypass Cloudflare
-        bypassCloudflare();
+        bypassCloudflare(iframe);
       }
     } catch (error) {
       console.warn(`Load attempt ${attempt} for ${url} failed:`, error);
@@ -114,10 +134,10 @@ document.addEventListener('DOMContentLoaded', () => {
         showNotification(`Retrying... (${attempt}/${MAX_RETRIES})`, false);
         
         // Refresh rules before retrying
-        await notifyServiceWorkerAndWait(url);
+        await notifyServiceWorkerAndWait(url, iframeId);
         
         setTimeout(() => {
-          loadUrlWithRetry(url, loadingMessage, attempt + 1);
+          loadIframe(iframe, url, loadingMessage, iframeId, attempt + 1);
         }, backoffDelay);
       } else {
         // Max retries reached, show error
@@ -129,8 +149,21 @@ document.addEventListener('DOMContentLoaded', () => {
     }
   }
   
+  // Function to reload the current active iframe
+  async function refreshCurrentIframe() {
+    if (isLoadingInProgress) {
+      return;
+    }
+    
+    if (currentActiveIframe === 'x') {
+      await loadIframe(iframeX, X_URL, 'Refreshing X.com', 'x');
+    } else {
+      await loadIframe(iframeGmgn, PMGN_URL, 'Refreshing pmgn.ai', 'gmgn');
+    }
+  }
+  
   // Function to notify service worker and wait for confirmation
-  async function notifyServiceWorkerAndWait(url) {
+  async function notifyServiceWorkerAndWait(url, iframeId) {
     return new Promise((resolve) => {
       if (navigator.serviceWorker && navigator.serviceWorker.controller) {
         // Create a unique message ID for this request
@@ -138,7 +171,10 @@ document.addEventListener('DOMContentLoaded', () => {
         
         // Set up one-time listener for response
         const handleMessage = (event) => {
-          if (event.data && event.data.type === 'RULES_READY' && event.data.messageId === messageId) {
+          if (event.data && 
+              event.data.type === 'RULES_READY' && 
+              event.data.messageId === messageId &&
+              (!event.data.iframeId || event.data.iframeId === iframeId)) {
             navigator.serviceWorker.removeEventListener('message', handleMessage);
             resolve();
           }
@@ -150,7 +186,8 @@ document.addEventListener('DOMContentLoaded', () => {
         navigator.serviceWorker.controller.postMessage({
           type: 'PREPARE_URL',
           url: url,
-          messageId: messageId
+          messageId: messageId,
+          iframeId: iframeId
         });
         
         // Resolve after timeout in case service worker doesn't respond
@@ -170,8 +207,11 @@ document.addEventListener('DOMContentLoaded', () => {
     if (loadingIndicator) {
       loadingIndicator.style.display = show ? 'block' : 'none';
     }
-    if (contentIframe) {
-      contentIframe.style.opacity = show ? '0.3' : '1';
+    
+    // Apply opacity to the active iframe
+    const activeIframe = currentActiveIframe === 'x' ? iframeX : iframeGmgn;
+    if (activeIframe) {
+      activeIframe.style.opacity = show ? '0.3' : '1';
     }
   }
   
@@ -195,11 +235,11 @@ document.addEventListener('DOMContentLoaded', () => {
   }
   
   // Function to bypass Cloudflare frame-busting
-  function bypassCloudflare() {
+  function bypassCloudflare(iframe) {
     try {
       // This function will attempt to execute in the parent context (panel.js)
       // to handle frame-busting prevention for the iframe content
-      if (contentIframe.contentWindow) {
+      if (iframe.contentWindow) {
         // Create a <script> element to be injected
         const scriptContent = `
           // This script will try to override the iframe content document
@@ -229,13 +269,13 @@ document.addEventListener('DOMContentLoaded', () => {
         `;
         
         // Wait for iframe to load
-        contentIframe.addEventListener('load', () => {
+        iframe.addEventListener('load', () => {
           try {
             // Attempt to execute script in iframe context
-            if (contentIframe.contentWindow && contentIframe.contentDocument) {
+            if (iframe.contentWindow && iframe.contentDocument) {
               const script = document.createElement('script');
               script.textContent = scriptContent;
-              contentIframe.contentDocument.head.appendChild(script);
+              iframe.contentDocument.head.appendChild(script);
               console.log('Injected Cloudflare bypass script');
             }
           } catch (e) {
@@ -261,12 +301,19 @@ document.addEventListener('DOMContentLoaded', () => {
     });
   }
   
+  if (btnRefresh) {
+    btnRefresh.addEventListener('click', () => {
+      refreshCurrentIframe();
+    });
+  }
+  
   // Function to notify the service worker about any URL
-  function notifyServiceWorker(url) {
+  function notifyServiceWorker(url, iframeId) {
     if (navigator.serviceWorker && navigator.serviceWorker.controller) {
       navigator.serviceWorker.controller.postMessage({
         type: 'LOAD_URL',
-        url: url
+        url: url,
+        iframeId: iframeId
       });
     }
   }
@@ -277,12 +324,20 @@ document.addEventListener('DOMContentLoaded', () => {
     
     if (event.data.type === 'BYPASS_CLOUDFLARE') {
       console.log('Received bypass Cloudflare instruction');
-      bypassCloudflare();
+      const targetIframe = event.data.iframeId === 'x' ? iframeX : iframeGmgn;
+      bypassCloudflare(targetIframe);
     }
   });
   
   // Initialize with a notification
   showNotification('Showing X.com', false);
+  
+  // Load GMGN iframe in the background
+  setTimeout(() => {
+    if (!iframeGmgn.getAttribute('data-loaded')) {
+      loadIframe(iframeGmgn, PMGN_URL, 'Preloading pmgn.ai in background', 'gmgn');
+    }
+  }, 5000);
   
   // Debug message to confirm panel script initialized
   console.log('Panel script initialized');

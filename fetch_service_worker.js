@@ -313,8 +313,9 @@ self.addEventListener('message', async (event) => {
   if (event.data && (event.data.type === 'LOAD_URL' || event.data.type === 'PREPARE_URL')) {
     const url = event.data.url;
     const messageId = event.data.messageId;  // Will be undefined for LOAD_URL messages
+    const iframeId = event.data.iframeId;  // Will be 'x' or 'gmgn' if specified
     
-    console.log(`Service worker received ${event.data.type} message:`, url);
+    console.log(`Service worker received ${event.data.type} message:`, url, 'for iframe:', iframeId || 'unspecified');
     
     try {
       const parsedUrl = new URL(url);
@@ -340,7 +341,8 @@ self.addEventListener('message', async (event) => {
                 console.log('Found extension client, sending bypass instruction');
                 client.postMessage({
                   type: 'BYPASS_CLOUDFLARE',
-                  url: url
+                  url: url,
+                  iframeId: iframeId || 'gmgn' // Default to gmgn if not specified
                 });
                 break;
               }
@@ -355,7 +357,8 @@ self.addEventListener('message', async (event) => {
           console.log('Sending RULES_READY response for messageId:', messageId);
           event.source.postMessage({
             type: 'RULES_READY',
-            messageId: messageId
+            messageId: messageId,
+            iframeId: iframeId
           });
         }
       }
@@ -366,7 +369,8 @@ self.addEventListener('message', async (event) => {
       if (event.data.type === 'PREPARE_URL' && messageId && event.source) {
         event.source.postMessage({
           type: 'RULES_READY',
-          messageId: messageId
+          messageId: messageId,
+          iframeId: iframeId
         });
       }
     }

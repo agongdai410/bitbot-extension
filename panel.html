@@ -38,12 +38,21 @@
 
     .button-container {
       display: flex;
-      justify-content: center;
-      gap: 16px;
+      justify-content: space-between;
       padding: 6px 0;
     }
+    
+    .left-buttons {
+      display: flex;
+      gap: 16px;
+    }
+    
+    .right-buttons {
+      display: flex;
+      align-items: center;
+    }
 
-    .toggle-btn {
+    .toggle-btn, .refresh-btn {
       padding: 8px 16px;
       background-color: #EFF3F4;
       color: var(--text-color);
@@ -55,7 +64,11 @@
       white-space: nowrap;
     }
 
-    .toggle-btn:hover {
+    .refresh-btn {
+      padding: 8px 12px;
+    }
+
+    .toggle-btn:hover, .refresh-btn:hover {
       background-color: #E1E8ED;
     }
 
@@ -77,6 +90,11 @@
       /* Mobile viewport simulation */
       max-width: 100%;
       margin: 0 auto;
+      display: none;
+    }
+
+    iframe.active {
+      display: block;
     }
 
     .loading-indicator {
@@ -155,14 +173,20 @@
 <body>
   <div class="header">
     <div class="button-container">
-      <button id="btn-x" class="toggle-btn active">X</button>
-      <button id="btn-pmgn" class="toggle-btn">pmgn.ai</button>
+      <div class="left-buttons">
+        <button id="btn-x" class="toggle-btn active">X</button>
+        <button id="btn-pmgn" class="toggle-btn">pmgn.ai</button>
+      </div>
+      <div class="right-buttons">
+        <button id="btn-refresh" class="refresh-btn">↻</button>
+      </div>
     </div>
   </div>
 
   <div class="content">
-    <!-- Single iframe that will load different sources -->
-    <iframe id="content-iframe" src="https://x.com"></iframe>
+    <!-- Two iframes for each content source -->
+    <iframe id="iframe-x" class="active" src="https://x.com"></iframe>
+    <iframe id="iframe-gmgn" src=""></iframe>
     
     <div id="loading-indicator" class="loading-indicator" style="display: none;">
       <div class="loading-content">
