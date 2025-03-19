@@ -1,0 +1,236 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no, viewport-fit=cover">
+  <meta http-equiv="Content-Security-Policy" content="default-src 'self'; frame-src *; script-src 'self' 'unsafe-inline'; style-src 'self' 'unsafe-inline';">
+  <title>Web Viewer Extension</title>
+  <style>
+    :root {
+      --primary-color: #1DA1F2;
+      --secondary-color: #14171A;
+      --background-color: #FFFFFF;
+      --text-color: #14171A;
+      --border-color: #E1E8ED;
+      --error-color: #E0245E;
+    }
+
+    body {
+      margin: 0;
+      padding: 0;
+      font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, Helvetica, Arial, sans-serif;
+      background-color: var(--background-color);
+      color: var(--text-color);
+      display: flex;
+      flex-direction: column;
+      height: 100vh;
+      overflow: hidden;
+    }
+
+    .header {
+      padding: 8px 12px;
+      border-bottom: 1px solid var(--border-color);
+      background-color: var(--background-color);
+      position: sticky;
+      top: 0;
+      z-index: 100;
+    }
+
+    .url-container {
+      display: flex;
+      position: relative;
+      align-items: center;
+      gap: 8px;
+    }
+
+    .input-wrapper {
+      position: relative;
+      flex: 1;
+    }
+
+    .url-input {
+      width: 100%;
+      padding: 10px 36px 10px 12px;
+      border: 1px solid var(--border-color);
+      border-radius: 20px;
+      font-size: 16px;
+      outline: none;
+      transition: all 0.2s ease;
+      box-sizing: border-box;
+    }
+
+    .url-input:focus {
+      border-color: var(--primary-color);
+      box-shadow: 0 0 0 2px rgba(29, 161, 242, 0.3);
+    }
+
+    .clear-btn {
+      position: absolute;
+      right: 8px;
+      top: 50%;
+      transform: translateY(-50%);
+      background: none;
+      border: none;
+      color: #657786;
+      cursor: pointer;
+      display: none;
+      width: 24px;
+      height: 24px;
+      border-radius: 50%;
+      align-items: center;
+      justify-content: center;
+      z-index: 5;
+    }
+
+    .clear-btn:hover {
+      background-color: rgba(101, 119, 134, 0.1);
+    }
+
+    .actions {
+      display: flex;
+      gap: 8px;
+    }
+
+    .btn {
+      padding: 8px 16px;
+      background-color: var(--primary-color);
+      color: white;
+      border: none;
+      border-radius: 20px;
+      cursor: pointer;
+      font-weight: bold;
+      transition: background-color 0.2s ease;
+      white-space: nowrap;
+    }
+
+    .btn:hover {
+      background-color: #1A91DA;
+    }
+
+    .btn-secondary {
+      background-color: #EFF3F4;
+      color: var(--text-color);
+    }
+
+    .btn-secondary:hover {
+      background-color: #E1E8ED;
+    }
+
+    .content {
+      flex: 1;
+      position: relative;
+      overflow: hidden;
+    }
+
+    iframe {
+      width: 100%;
+      height: 100%;
+      border: none;
+      /* Mobile viewport simulation */
+      max-width: 100%;
+      margin: 0 auto;
+      display: block;
+    }
+
+    .loading-indicator {
+      position: fixed;
+      top: 0;
+      left: 0;
+      width: 100%;
+      height: 100%;
+      display: flex;
+      flex-direction: column;
+      justify-content: center;
+      align-items: center;
+      background-color: rgba(255, 255, 255, 0.9);
+      z-index: 1000;
+    }
+
+    .loading-content {
+      display: flex;
+      flex-direction: column;
+      justify-content: center;
+      align-items: center;
+      text-align: center;
+      position: relative;
+      top: 35%;
+      transform: translateY(0);
+    }
+
+    .loading-spinner {
+      width: 40px;
+      height: 40px;
+      border: 4px solid #f3f3f3;
+      border-top: 4px solid var(--primary-color);
+      border-radius: 50%;
+      animation: spin 1s linear infinite;
+      margin-bottom: 16px;
+    }
+
+    .loading-text {
+      margin: 0;
+      padding: 0;
+      text-align: center;
+      font-size: 16px;
+      color: var(--text-color);
+    }
+
+    .error-message {
+      color: var(--error-color);
+      text-align: center;
+      padding: 16px;
+      max-width: 80%;
+      display: none;
+      position: fixed;
+      top: 50px;
+    }
+
+    @keyframes spin {
+      0% { transform: rotate(0deg); }
+      100% { transform: rotate(360deg); }
+    }
+
+    #notification {
+      position: fixed;
+      top: 70px;
+      left: 50%;
+      transform: translateX(-50%);
+      background-color: #333;
+      color: white;
+      padding: 10px 20px;
+      border-radius: 5px;
+      z-index: 1000;
+      opacity: 0;
+      transition: opacity 0.3s;
+    }
+  </style>
+</head>
+<body>
+  <div class="header">
+    <div class="url-container">
+      <div class="input-wrapper">
+        <input type="text" id="url-input" class="url-input" placeholder="Enter website URL..." />
+        <button id="clear-button" class="clear-btn">✕</button>
+      </div>
+      <div class="actions">
+        <button id="load-button" class="btn">Go</button>
+        <button id="refresh-button" class="btn btn-secondary">Refresh</button>
+      </div>
+    </div>
+  </div>
+
+  <div class="content">
+    <iframe id="view-frame" src="https://x.com"></iframe>
+    
+    <div id="loading-indicator" class="loading-indicator" style="display: none;">
+      <div class="loading-content">
+        <div class="loading-spinner"></div>
+        <p class="loading-text">Loading content...</p>
+      </div>
+    </div>
+    <div id="notification"></div>
+  </div>
+
+  <script src="panel.js"></script>
+</body>
+</html> 

@@ -1,64 +1,38 @@
-<div align="center">
-  <img width="200" src="public/logo.svg" alt="Logo">
-  <h1>Gem Screener - Any web page as copilot</h1>
-  <p>Use the official ChatGPT website or any other webpage for free as your AI copilot, including GPTs, GPT-4, or any new features. </p>
-</div>
+# Web Viewer Extension
 
-## Install/Download - Edge Add-ons & Chrome web store
+A Chrome extension that allows you to view any website in a side panel.
 
-- [Edge Add-ons - Gem Screener](https://microsoftedge.microsoft.com/addons/detail/anything-copilot/lbeehbkcmjaopnlccpjcdgamcabhnanl)
-- [Chrome web store - Gem Screener](https://chromewebstore.google.com/u/1/detail/anything-copilot-any-web/lilckelmopbcffmglfmfhelaajhjpcff)
+## Features
 
-Open any web page in a Copilot window and seamlessly multitask with other pages or applications.
+- View websites in the browser's side panel
+- Mobile/Desktop view toggle
+- Bypasses many X-Frame-Options restrictions
+- Special handling for Twitter/X and YouTube
 
-## Screenshots & Video
+## Setup
 
-<table>
-  <tr>
-    <td>
-      <img src="docs/assets/1280x800_1.png" alt="Gem Screener screenshot 1" >
-    </td>
-    <td>
-      <img src="docs/assets/1280x800_2.png" alt="Gem Screener screenshot 1" >
-    </td>
-  </tr>
-</table>
+Before loading the extension, you need to generate the icon files:
 
-[📺 Youtube - Gem Screener demo](https://youtu.be/RnOUGg-WiH0?si=8YHPLGvczmUTsVqU)
+1. Open the `generate_icon.html` file in your browser
+2. Click the "Generate PNG" button
+3. Right-click on the image and select "Save Image As..."
+4. Save as:
+   - `icons/icon16.png` - resize to 16x16
+   - `icons/icon48.png` - resize to 48x48
+   - `icons/icon128.png` - keep as 128x128
 
-## Recommended IDE Setup
+Alternatively, you can create your own icon files and place them in the `icons` directory.
 
-[VSCode](https://code.visualstudio.com/) + [Volar](https://marketplace.visualstudio.com/items?itemName=Vue.volar) (and disable Vetur) + [TypeScript Vue Plugin (Volar)](https://marketplace.visualstudio.com/items?itemName=Vue.vscode-typescript-vue-plugin).
+## Usage
 
-## Type Support for `.vue` Imports in TS
+1. Click on the extension icon in your browser toolbar
+2. Click the "Open Side Panel" button in the popup
+3. Enter a URL in the side panel and click "Go"
+4. Toggle between mobile and desktop views using the button
 
-TypeScript cannot handle type information for `.vue` imports by default, so we replace the `tsc` CLI with `vue-tsc` for type checking. In editors, we need [TypeScript Vue Plugin (Volar)](https://marketplace.visualstudio.com/items?itemName=Vue.vscode-typescript-vue-plugin) to make the TypeScript language service aware of `.vue` types.
+## Troubleshooting
 
-If the standalone TypeScript plugin doesn't feel fast enough to you, Volar has also implemented a [Take Over Mode](https://github.com/johnsoncodehk/volar/discussions/471#discussioncomment-1361669) that is more performant. You can enable it by the following steps:
-
-1. Disable the built-in TypeScript Extension
-   1. Run `Extensions: Show Built-in Extensions` from VSCode's command palette
-   2. Find `TypeScript and JavaScript Language Features`, right click and select `Disable (Workspace)`
-2. Reload the VSCode window by running `Developer: Reload Window` from the command palette.
-
-## Customize configuration
-
-See [Vite Configuration Reference](https://vitejs.dev/config/).
-
-## Project Setup
-
-```sh
-npm install
-```
-
-### Compile and Hot-Reload for Development
-
-```sh
-npm run dev
-```
-
-### Type-Check, Compile and Minify for Production
-
-```sh
-npm run build
-```
+If a website doesn't load in the side panel:
+- Check the browser console for errors
+- Some websites intentionally block being displayed in iframes
+- Try using the mobile view option which may work better for some sites
