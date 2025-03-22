@@ -343,14 +343,13 @@ document.addEventListener('DOMContentLoaded', () => {
         }
         
         // Initialize with a notification
-        showNotification('Showing X.com', false);
+        showNotification('Panel ready', false);
         
-        // Load GMGN iframe in the background
+        // Wait for service worker to be fully active before loading x.com
         setTimeout(() => {
-          if (!iframeGmgn.getAttribute('data-loaded')) {
-            loadIframe(iframeGmgn, PMGN_URL, 'Preloading pmgn.ai in background', 'gmgn');
-          }
-        }, 5000);
+          // Only load X content after panel is fully initialized
+          loadIframe(iframeX, X_URL, 'Loading X.com', 'x');
+        }, 500);
       } catch (error) {
         console.error('Service Worker registration failed:', error);
         showNotification('Service worker registration failed', true);

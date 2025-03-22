@@ -9,8 +9,8 @@
     :root {
       --primary-color: #1DA1F2;
       --secondary-color: #14171A;
-      --background-color: #FFFFFF;
-      --text-color: #14171A;
+      --background-color: #434343;
+      --text-color: #0B0C0E;
       --border-color: #E1E8ED;
       --error-color: #E0245E;
     }
@@ -28,8 +28,7 @@
     }
 
     .header {
-      padding: 8px 12px;
-      border-bottom: 1px solid var(--border-color);
+      padding: 9px 12px;
       background-color: var(--background-color);
       position: sticky;
       top: 0;
@@ -193,8 +192,8 @@
   </div>
 
   <div class="content">
-    <!-- Two separate iframes for each site -->
-    <iframe id="iframe-x" class="active" src="https://x.com"></iframe>
+    <!-- Two separate iframes for each site - empty src to avoid initial loading -->
+    <iframe id="iframe-x" class="active" src=""></iframe>
     <iframe id="iframe-gmgn" src=""></iframe>
     
     <div id="loading-indicator" class="loading-indicator" style="display: none;">
@@ -203,8 +202,8 @@
         <p class="loading-text">Loading content...</p>
       </div>
     </div>
-    <div id="notification"></div>
   </div>
+  <div id="notification"></div>
 
   <script src="panel.js"></script>
 </body>
