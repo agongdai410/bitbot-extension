@@ -75,19 +75,28 @@ let attemptedGuestToken = false;
 // Track side panel URLs to distinguish them from normal browsing
 const sidePanelUrls = new Set();
 
+// Track the last token we've detected to avoid redundant searches
+let lastDetectedToken = null;
+
 // Register this service worker
 self.addEventListener('install', (event) => {
-  console.log('Service worker installing');
-  // Initialize header rules
-  event.waitUntil(initializeHeaderRules());
-  // Skip waiting to activate immediately
-  self.skipWaiting();
+  console.log('Service Worker: Installed');
+  
+  // Skip waiting to activate the service worker faster
+  event.waitUntil(self.skipWaiting());
 });
 
 self.addEventListener('activate', (event) => {
-  console.log('Service Worker activated');
-  // Claim clients so the service worker starts controlling current pages
+  console.log('Service Worker: Activated');
+  
+  // Take control of all clients/tabs immediately
   event.waitUntil(clients.claim());
+  
+  // Set up the declarative net request rules
+  event.waitUntil(initializeHeaderRules());
+  
+  // Start monitoring tabs for URL changes
+  setupTabUrlMonitoring();
 });
 
 // Listen for messages from panel.js
@@ -934,4 +943,62 @@ async function getGuestToken() {
   } catch (error) {
     console.error('Error getting guest token:', error);
   }
+}
+
+// Function to monitor tab URL changes
+function setupTabUrlMonitoring() {
+  // Check if the tab API is available
+  if (chrome.tabs) {
+    // Listen for tab updates
+    chrome.tabs.onUpdated.addListener((tabId, changeInfo, tab) => {
+      // Only process when URL changes and loading is complete
+      if (changeInfo.status === 'complete' && tab.url) {
+        console.log('Tab updated:', tab.url);
+        
+        // Check if it's a gmgn.ai token page
+        if (tab.url.includes('gmgn.ai') && tab.url.includes('/token/')) {
+          // Extract token address
+          const tokenAddress = extractContractAddress(tab.url);
+          if (tokenAddress && tokenAddress !== lastDetectedToken) {
+            lastDetectedToken = tokenAddress;
+            console.log('Token detected in browser tab:', tokenAddress);
+            
+            // Notify all extension clients (including panel) about this token
+            notifyClientsAboutToken(tokenAddress, tab.url);
+          }
+        }
+      }
+    });
+    
+    console.log('Tab URL monitoring set up');
+  } else {
+    console.error('Cannot access chrome.tabs API');
+  }
+}
+
+// Function to extract contract address from gmgn.ai URL
+function extractContractAddress(url) {
+  const matches = url.match(/\/token\/([^\/\?#]+)/);
+  if (matches && matches[1]) {
+    return matches[1];
+  }
+  return null;
+}
+
+// Function to notify clients about detected token
+async function notifyClientsAboutToken(tokenAddress, gmgnUrl) {
+  const clientList = await clients.matchAll({
+    type: 'window',
+    includeUncontrolled: true
+  });
+  
+  console.log(`Notifying ${clientList.length} clients about token ${tokenAddress}`);
+  
+  clientList.forEach(client => {
+    client.postMessage({
+      type: 'TOKEN_DETECTED',
+      tokenAddress: tokenAddress,
+      gmgnUrl: gmgnUrl
+    });
+  });
 } 

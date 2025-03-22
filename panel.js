@@ -22,9 +22,36 @@ document.addEventListener('DOMContentLoaded', () => {
   const MAX_RETRIES = 3;
   // Track current active iframe
   let currentActiveIframe = 'x';
-  // Track history for each iframe
-  let xHistory = { current: -1, urls: [] };
-  let gmgnHistory = { current: -1, urls: [] };
+  // Track history for each iframe - initialize from localStorage if available
+  let xHistory = loadHistoryFromLocalStorage('x') || { current: -1, urls: [] };
+  let gmgnHistory = loadHistoryFromLocalStorage('gmgn') || { current: -1, urls: [] };
+  // Max history size
+  const MAX_HISTORY_SIZE = 100;
+  
+  // Track the last token we've detected to avoid redundant searches
+  let lastDetectedToken = null;
+  
+  // Function to load history from localStorage
+  function loadHistoryFromLocalStorage(iframeId) {
+    try {
+      const savedHistory = localStorage.getItem(`${iframeId}_history`);
+      if (savedHistory) {
+        return JSON.parse(savedHistory);
+      }
+    } catch (e) {
+      console.error(`Error loading ${iframeId} history from localStorage:`, e);
+    }
+    return null;
+  }
+  
+  // Function to save history to localStorage
+  function saveHistoryToLocalStorage(iframeId, history) {
+    try {
+      localStorage.setItem(`${iframeId}_history`, JSON.stringify(history));
+    } catch (e) {
+      console.error(`Error saving ${iframeId} history to localStorage:`, e);
+    }
+  }
   
   // Function to toggle between iframes
   async function toggleIframeSource(showX) {
@@ -88,6 +115,17 @@ document.addEventListener('DOMContentLoaded', () => {
     history.urls.push(url);
     history.current = history.urls.length - 1;
     
+    // Maintain max size by removing oldest entries
+    if (history.urls.length > MAX_HISTORY_SIZE) {
+      const excess = history.urls.length - MAX_HISTORY_SIZE;
+      history.urls = history.urls.slice(excess);
+      history.current -= excess;
+      if (history.current < 0) history.current = 0;
+    }
+    
+    // Save to localStorage
+    saveHistoryToLocalStorage(iframeId, history);
+    
     // Update navigation buttons
     updateNavigationState();
   }
@@ -101,6 +139,10 @@ document.addEventListener('DOMContentLoaded', () => {
       history.current--;
       const url = history.urls[history.current];
       await loadIframe(iframe, url, `Loading previous page`, currentActiveIframe);
+      
+      // Save updated history position
+      saveHistoryToLocalStorage(currentActiveIframe, history);
+      
       updateNavigationState();
     }
   }
@@ -114,6 +156,10 @@ document.addEventListener('DOMContentLoaded', () => {
       history.current++;
       const url = history.urls[history.current];
       await loadIframe(iframe, url, `Loading next page`, currentActiveIframe);
+      
+      // Save updated history position
+      saveHistoryToLocalStorage(currentActiveIframe, history);
+      
       updateNavigationState();
     }
   }
@@ -153,6 +199,54 @@ document.addEventListener('DOMContentLoaded', () => {
       iframeGmgn.classList.add('active');
       iframeX.classList.remove('active');
       currentActiveIframe = 'gmgn';
+    }
+  }
+  
+  // Function to extract contract address from gmgn.ai token URL
+  function extractContractAddress(url) {
+    // URL pattern: https://gmgn.ai/sol/token/CONTRACT_ADDRESS
+    const matches = url.match(/\/token\/([^\/\?#]+)/);
+    if (matches && matches[1]) {
+      return matches[1];
+    }
+    return null;
+  }
+  
+  // Function to switch to X and search for a token
+  async function searchTokenOnX(contractAddress) {
+    if (!contractAddress) return;
+    
+    const searchUrl = `https://x.com/search?q=${encodeURIComponent(contractAddress)}`;
+    
+    // Switch to X iframe
+    btnXIcon.classList.add('active');
+    btnGmgnIcon.classList.remove('active');
+    iframeX.classList.add('active');
+    iframeGmgn.classList.remove('active');
+    currentActiveIframe = 'x';
+    
+    // Load the search URL
+    await loadIframe(iframeX, searchUrl, `Searching for token on X.com`, 'x');
+    addToHistory(searchUrl, 'x');
+    
+    // Update navigation state
+    updateNavigationState();
+  }
+  
+  // Function to check if current URL is a token page and automatically search on X
+  function checkForTokenPage(url, iframeId) {
+    if (iframeId === 'gmgn' && url.includes('/token/')) {
+      const contractAddress = extractContractAddress(url);
+      if (contractAddress) {
+        // Save the current gmgn url to history
+        addToHistory(url, 'gmgn');
+        
+        // Automatically search this token on X
+        searchTokenOnX(contractAddress);
+        
+        // Show a brief notification about the automatic search
+        showNotification(`Searching for ${contractAddress.slice(0, 8)}... on X`, false);
+      }
     }
   }
   
@@ -220,6 +314,16 @@ document.addEventListener('DOMContentLoaded', () => {
         // Try to bypass Cloudflare
         bypassCloudflare(iframe);
       }
+      
+      // For gmgn.ai token pages, check if it's a new token
+      if (iframeId === 'gmgn' && url.includes('/token/')) {
+        const token = extractContractAddress(url);
+        if (token && token !== lastDetectedToken) {
+          lastDetectedToken = token;
+          // Check if it's a token page
+          checkForTokenPage(url, iframeId);
+        }
+      }
     } catch (error) {
       console.warn(`Load attempt ${attempt} for ${url} failed:`, error);
       
@@ -241,25 +345,6 @@ document.addEventListener('DOMContentLoaded', () => {
         showLoading(false);
         isLoadingInProgress = false;
       }
-    }
-  }
-  
-  // Function to reload the current active iframe
-  async function refreshCurrentIframe() {
-    if (isLoadingInProgress) {
-      return;
-    }
-    
-    if (currentActiveIframe === 'x') {
-      // Get current URL from history or default to home
-      const history = xHistory;
-      const currentURL = history.urls[history.current] || X_URL;
-      await loadIframe(iframeX, currentURL, 'Refreshing X.com', 'x');
-    } else {
-      // Get current URL from history or default to home
-      const history = gmgnHistory;
-      const currentURL = history.urls[history.current] || PMGN_URL;
-      await loadIframe(iframeGmgn, currentURL, 'Refreshing pmgn.ai', 'gmgn');
     }
   }
   
@@ -388,6 +473,25 @@ document.addEventListener('DOMContentLoaded', () => {
     }
   }
   
+  // Function to reload the current active iframe
+  async function refreshCurrentIframe() {
+    if (isLoadingInProgress) {
+      return;
+    }
+    
+    if (currentActiveIframe === 'x') {
+      // Get current URL from history or default to home
+      const history = xHistory;
+      const currentURL = history.urls[history.current] || X_URL;
+      await loadIframe(iframeX, currentURL, 'Refreshing X.com', 'x');
+    } else {
+      // Get current URL from history or default to home
+      const history = gmgnHistory;
+      const currentURL = history.urls[history.current] || PMGN_URL;
+      await loadIframe(iframeGmgn, currentURL, 'Refreshing pmgn.ai', 'gmgn');
+    }
+  }
+  
   // Event Listeners
   btnXIcon.addEventListener('click', () => toggleIframeSource(true));
   btnGmgnIcon.addEventListener('click', () => toggleIframeSource(false));
@@ -401,6 +505,14 @@ document.addEventListener('DOMContentLoaded', () => {
   btnSettings.addEventListener('click', () => {
     showNotification('Settings feature coming soon', false);
   });
+  
+  // Trade button to open Bitbot in a new tab
+  const tradeButton = document.getElementById('trade-button');
+  if (tradeButton) {
+    tradeButton.addEventListener('click', () => {
+      window.open('https://www.bitbot.app/', '_blank');
+    });
+  }
   
   // Function to notify the service worker about any URL
   function notifyServiceWorker(url, iframeId) {
@@ -421,6 +533,23 @@ document.addEventListener('DOMContentLoaded', () => {
       console.log('Received bypass Cloudflare instruction');
       const targetIframe = event.data.iframeId === 'x' ? iframeX : iframeGmgn;
       bypassCloudflare(targetIframe);
+    }
+    else if (event.data.type === 'TOKEN_DETECTED') {
+      console.log('Token detected in main browser:', event.data.tokenAddress);
+      
+      // Save gmgn URL to history even if not currently viewing that iframe
+      addToHistory(event.data.gmgnUrl, 'gmgn');
+      
+      // Check if the token is different from last detected
+      if (event.data.tokenAddress !== lastDetectedToken) {
+        lastDetectedToken = event.data.tokenAddress;
+        
+        // Search for this token on X
+        searchTokenOnX(event.data.tokenAddress);
+        
+        // Show notification
+        showNotification(`Searching for ${event.data.tokenAddress.slice(0, 8)}... on X`, false);
+      }
     }
   });
   

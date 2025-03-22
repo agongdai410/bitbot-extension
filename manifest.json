@@ -6,6 +6,7 @@
   "permissions": [
     "sidePanel",
     "storage",
+    "tabs",
     "declarativeNetRequestWithHostAccess"
   ],
   "host_permissions": [

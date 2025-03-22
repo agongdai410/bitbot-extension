@@ -164,6 +164,40 @@
       transition: opacity 0.3s;
     }
 
+    #token-search-notification {
+      position: fixed;
+      bottom: 60px;
+      left: 50%;
+      transform: translateX(-50%);
+      background-color: #333;
+      color: white;
+      padding: 10px 20px;
+      border-radius: 5px;
+      z-index: 1000;
+      display: flex;
+      align-items: center;
+      gap: 10px;
+      box-shadow: 0 4px 8px rgba(0, 0, 0, 0.2);
+    }
+
+    #token-search-notification button {
+      background-color: #1DA1F2;
+      color: white;
+      border: none;
+      border-radius: 3px;
+      padding: 5px 10px;
+      cursor: pointer;
+    }
+
+    #token-search-notification .close-button {
+      background-color: transparent;
+      color: white;
+      border: none;
+      cursor: pointer;
+      font-size: 16px;
+      padding: 0 5px;
+    }
+
     #version-info {
       font-size: 12px;
       margin-left: 10px;
