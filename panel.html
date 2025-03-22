@@ -9,10 +9,11 @@
     :root {
       --primary-color: #1DA1F2;
       --secondary-color: #14171A;
-      --background-color: #434343;
+      --background-color: #212128;
       --text-color: #0B0C0E;
       --border-color: #E1E8ED;
       --error-color: #E0245E;
+      --green-color: #83D94F;
     }
 
     body {
@@ -38,59 +39,52 @@
     .button-container {
       display: flex;
       justify-content: space-between;
-      padding: 6px 0;
+      align-items: center;
+      padding: 0;
     }
     
-    .toggle-buttons {
-      display: flex;
-      gap: 16px;
-    }
-
-    .toggle-btn {
-      padding: 8px 16px;
-      background-color: #EFF3F4;
-      color: var(--text-color);
-      border: none;
-      border-radius: 20px;
-      cursor: pointer;
-      font-weight: bold;
-      transition: background-color 0.2s ease;
-      white-space: nowrap;
-    }
-
-    .toggle-btn:hover {
-      background-color: #E1E8ED;
-    }
-
-    .toggle-btn.active {
-      background-color: var(--primary-color);
-      color: white;
-    }
-
-    .refresh-button {
+    .left-icons {
       display: flex;
       align-items: center;
+      gap: 4px;
     }
 
-    .refresh-btn {
-      padding: 8px 12px;
-      background-color: #EFF3F4;
-      color: var(--text-color);
+    .right-icons {
+      display: flex;
+      align-items: center;
+      gap: 4px;
+    }
+
+    .icon-button {
+      background: none;
       border: none;
-      border-radius: 20px;
       cursor: pointer;
-      font-weight: bold;
-      transition: background-color 0.2s ease;
+      padding: 5px;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      border-radius: 50%;
+      transition: background-color 0.2s;
     }
 
-    .refresh-btn:hover {
-      background-color: #E1E8ED;
+    .icon-button:hover {
+      background-color: rgba(255, 255, 255, 0.1);
+    }
+
+    .icon-button img {
+      width: 20px;
+      height: 20px;
+    }
+
+    .icon-button.active {
+      background-color: rgba(255, 255, 255, 0.2);
     }
 
     .content {
       flex: 1;
       position: relative;
       overflow: hidden;
+      padding: 4px;
     }
 
     iframe {
@@ -101,6 +95,7 @@
       max-width: 100%;
       margin: 0 auto;
       display: none;
+      border-radius: 14px;
     }
 
     iframe.active {
@@ -174,19 +169,58 @@
       margin-left: 10px;
       position: relative;
       bottom: 10px;
+      color: #fff;
+    }
+
+    .footer {
+      margin: 8px;
+    }
+
+    #trade-button {
+      background-color: var(--green-color);
+      background-color: var(--green-color);
+      color: var(--text-color);
+      border: none;
+      border-radius: 8px;
+      cursor: pointer;
+      height: 44px;
+      width: 100%;
+      font-size: 16px;
+      font-weight: 500;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      gap: 4px;
     }
   </style>
 </head>
 <body>
   <div class="header">
     <div class="button-container">
-      <div class="toggle-buttons">
-        <button id="btn-x" class="toggle-btn active">X</button>
-        <button id="btn-pmgn" class="toggle-btn">pmgn.ai</button>
+      <div class="left-icons">
+        <button id="btn-x-icon" class="icon-button active">
+          <img src="icons/x.svg" alt="X">
+        </button>
+        <button id="btn-gmgn-icon" class="icon-button">
+          <img src="icons/gmgn.svg" alt="GMGN">
+        </button>
       </div>
-      <div class="refresh-button">
-        <button id="btn-refresh" class="refresh-btn">↻</button>
-        <div id="version-info">Version: 0.0.3</div>
+      <div class="right-icons">
+        <button id="btn-backward" class="icon-button" title="Back">
+          <img src="icons/backward.svg" alt="Back">
+        </button>
+        <button id="btn-forward" class="icon-button" title="Forward">
+          <img src="icons/forward.svg" alt="Forward">
+        </button>
+        <button id="btn-refresh" class="icon-button" title="Refresh">
+          <img src="icons/refresh.svg" alt="Refresh">
+        </button>
+        <button id="btn-swap" class="icon-button" title="Swap">
+          <img src="icons/swap.svg" alt="Swap">
+        </button>
+        <button id="btn-settings" class="icon-button" title="Settings">
+          <img src="icons/settings.svg" alt="Settings">
+        </button>
       </div>
     </div>
   </div>
@@ -203,6 +237,14 @@
       </div>
     </div>
   </div>
+
+  <div class="footer">
+    <button id="trade-button">
+      <img src="icons/bitbot.svg" alt="Bitbot">
+      Trade on Bitbot
+    </button>
+  </div>
+
   <div id="notification"></div>
 
   <script src="panel.js"></script>

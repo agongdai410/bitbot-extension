@@ -1,9 +1,13 @@
 // Wait for DOM to be fully loaded before accessing any elements
 document.addEventListener('DOMContentLoaded', () => {
   // Get DOM elements
-  const btnX = document.getElementById('btn-x');
-  const btnPmgn = document.getElementById('btn-pmgn');
   const btnRefresh = document.getElementById('btn-refresh');
+  const btnXIcon = document.getElementById('btn-x-icon');
+  const btnGmgnIcon = document.getElementById('btn-gmgn-icon');
+  const btnBackward = document.getElementById('btn-backward');
+  const btnForward = document.getElementById('btn-forward');
+  const btnSwap = document.getElementById('btn-swap');
+  const btnSettings = document.getElementById('btn-settings');
   const iframeX = document.getElementById('iframe-x');
   const iframeGmgn = document.getElementById('iframe-gmgn');
   const loadingIndicator = document.getElementById('loading-indicator');
@@ -18,6 +22,9 @@ document.addEventListener('DOMContentLoaded', () => {
   const MAX_RETRIES = 3;
   // Track current active iframe
   let currentActiveIframe = 'x';
+  // Track history for each iframe
+  let xHistory = { current: -1, urls: [] };
+  let gmgnHistory = { current: -1, urls: [] };
   
   // Function to toggle between iframes
   async function toggleIframeSource(showX) {
@@ -29,8 +36,8 @@ document.addEventListener('DOMContentLoaded', () => {
     
     // Update button states
     if (showX) {
-      btnX.classList.add('active');
-      btnPmgn.classList.remove('active');
+      btnXIcon.classList.add('active');
+      btnGmgnIcon.classList.remove('active');
       
       // Show X iframe, hide GMGN iframe
       iframeX.classList.add('active');
@@ -40,12 +47,14 @@ document.addEventListener('DOMContentLoaded', () => {
       // If X iframe hasn't been loaded yet, load it
       if (!iframeX.getAttribute('data-loaded')) {
         await loadIframe(iframeX, X_URL, 'Loading X.com', 'x');
+        // Add to history
+        addToHistory(X_URL, 'x');
       } else {
         showNotification('Showing X.com', false);
       }
     } else {
-      btnPmgn.classList.add('active');
-      btnX.classList.remove('active');
+      btnGmgnIcon.classList.add('active');
+      btnXIcon.classList.remove('active');
       
       // Show GMGN iframe, hide X iframe
       iframeGmgn.classList.add('active');
@@ -55,9 +64,95 @@ document.addEventListener('DOMContentLoaded', () => {
       // If GMGN iframe hasn't been loaded yet, load it
       if (!iframeGmgn.getAttribute('data-loaded')) {
         await loadIframe(iframeGmgn, PMGN_URL, 'Loading pmgn.ai', 'gmgn');
+        // Add to history
+        addToHistory(PMGN_URL, 'gmgn');
       } else {
         showNotification('Showing pmgn.ai', false);
       }
+    }
+    
+    // Update navigation buttons state
+    updateNavigationState();
+  }
+  
+  // Function to add URL to history
+  function addToHistory(url, iframeId) {
+    const history = iframeId === 'x' ? xHistory : gmgnHistory;
+    
+    // If we're not at the end of history, truncate the future entries
+    if (history.current < history.urls.length - 1) {
+      history.urls = history.urls.slice(0, history.current + 1);
+    }
+    
+    // Add the new URL
+    history.urls.push(url);
+    history.current = history.urls.length - 1;
+    
+    // Update navigation buttons
+    updateNavigationState();
+  }
+  
+  // Function to navigate back
+  async function goBack() {
+    const history = currentActiveIframe === 'x' ? xHistory : gmgnHistory;
+    const iframe = currentActiveIframe === 'x' ? iframeX : iframeGmgn;
+    
+    if (history.current > 0) {
+      history.current--;
+      const url = history.urls[history.current];
+      await loadIframe(iframe, url, `Loading previous page`, currentActiveIframe);
+      updateNavigationState();
+    }
+  }
+  
+  // Function to navigate forward
+  async function goForward() {
+    const history = currentActiveIframe === 'x' ? xHistory : gmgnHistory;
+    const iframe = currentActiveIframe === 'x' ? iframeX : iframeGmgn;
+    
+    if (history.current < history.urls.length - 1) {
+      history.current++;
+      const url = history.urls[history.current];
+      await loadIframe(iframe, url, `Loading next page`, currentActiveIframe);
+      updateNavigationState();
+    }
+  }
+  
+  // Function to update navigation button states
+  function updateNavigationState() {
+    const history = currentActiveIframe === 'x' ? xHistory : gmgnHistory;
+    
+    // Update back button
+    btnBackward.disabled = history.current <= 0;
+    btnBackward.style.opacity = history.current <= 0 ? '0.5' : '1';
+    
+    // Update forward button
+    btnForward.disabled = history.current >= history.urls.length - 1;
+    btnForward.style.opacity = history.current >= history.urls.length - 1 ? '0.5' : '1';
+  }
+  
+  // Function to go home (load the default page for current iframe)
+  async function goHome(site) {
+    if (isLoadingInProgress) return;
+    
+    if (site === 'x' || (site === undefined && currentActiveIframe === 'x')) {
+      await loadIframe(iframeX, X_URL, 'Loading X.com home', 'x');
+      addToHistory(X_URL, 'x');
+      // Update the active state
+      btnXIcon.classList.add('active');
+      btnGmgnIcon.classList.remove('active');
+      iframeX.classList.add('active');
+      iframeGmgn.classList.remove('active');
+      currentActiveIframe = 'x';
+    } else {
+      await loadIframe(iframeGmgn, PMGN_URL, 'Loading pmgn.ai home', 'gmgn');
+      addToHistory(PMGN_URL, 'gmgn');
+      // Update the active state
+      btnGmgnIcon.classList.add('active');
+      btnXIcon.classList.remove('active');
+      iframeGmgn.classList.add('active');
+      iframeX.classList.remove('active');
+      currentActiveIframe = 'gmgn';
     }
   }
   
@@ -156,9 +251,15 @@ document.addEventListener('DOMContentLoaded', () => {
     }
     
     if (currentActiveIframe === 'x') {
-      await loadIframe(iframeX, X_URL, 'Refreshing X.com', 'x');
+      // Get current URL from history or default to home
+      const history = xHistory;
+      const currentURL = history.urls[history.current] || X_URL;
+      await loadIframe(iframeX, currentURL, 'Refreshing X.com', 'x');
     } else {
-      await loadIframe(iframeGmgn, PMGN_URL, 'Refreshing pmgn.ai', 'gmgn');
+      // Get current URL from history or default to home
+      const history = gmgnHistory;
+      const currentURL = history.urls[history.current] || PMGN_URL;
+      await loadIframe(iframeGmgn, currentURL, 'Refreshing pmgn.ai', 'gmgn');
     }
   }
   
@@ -287,24 +388,19 @@ document.addEventListener('DOMContentLoaded', () => {
     }
   }
   
-  // Set up event listeners for the buttons
-  if (btnX) {
-    btnX.addEventListener('click', () => {
-      toggleIframeSource(true);
-    });
-  }
-  
-  if (btnPmgn) {
-    btnPmgn.addEventListener('click', () => {
-      toggleIframeSource(false);
-    });
-  }
-  
-  if (btnRefresh) {
-    btnRefresh.addEventListener('click', () => {
-      refreshCurrentIframe();
-    });
-  }
+  // Event Listeners
+  btnXIcon.addEventListener('click', () => toggleIframeSource(true));
+  btnGmgnIcon.addEventListener('click', () => toggleIframeSource(false));
+  btnRefresh.addEventListener('click', refreshCurrentIframe);
+  btnBackward.addEventListener('click', goBack);
+  btnForward.addEventListener('click', goForward);
+  btnSwap.addEventListener('click', () => {
+    // Toggle between X and pmgn.ai
+    toggleIframeSource(currentActiveIframe === 'gmgn');
+  });
+  btnSettings.addEventListener('click', () => {
+    showNotification('Settings feature coming soon', false);
+  });
   
   // Function to notify the service worker about any URL
   function notifyServiceWorker(url, iframeId) {
@@ -349,6 +445,8 @@ document.addEventListener('DOMContentLoaded', () => {
         setTimeout(() => {
           // Only load X content after panel is fully initialized
           loadIframe(iframeX, X_URL, 'Loading X.com', 'x');
+          // Add to history
+          addToHistory(X_URL, 'x');
         }, 500);
       } catch (error) {
         console.error('Service Worker registration failed:', error);
@@ -359,6 +457,9 @@ document.addEventListener('DOMContentLoaded', () => {
       showNotification('Service Workers not supported', true);
     }
   }
+  
+  // Initialize navigation buttons
+  updateNavigationState();
   
   // Initialize on load
   initServiceWorker();
