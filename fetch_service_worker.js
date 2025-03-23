@@ -970,6 +970,29 @@ function setupTabUrlMonitoring() {
       }
     });
     
+    // Listen for tab switching
+    chrome.tabs.onActivated.addListener((activeInfo) => {
+      // Get details of the newly activated tab
+      chrome.tabs.get(activeInfo.tabId, (tab) => {
+        if (tab && tab.url) {
+          console.log('Switched to tab:', tab.url);
+          
+          // Check if it's a gmgn.ai token page
+          if (tab.url.includes('gmgn.ai') && tab.url.includes('/token/')) {
+            // Extract token address
+            const tokenAddress = extractContractAddress(tab.url);
+            if (tokenAddress && tokenAddress !== lastDetectedToken) {
+              lastDetectedToken = tokenAddress;
+              console.log('Token detected in switched tab:', tokenAddress);
+              
+              // Notify all extension clients (including panel) about this token
+              notifyClientsAboutToken(tokenAddress, tab.url);
+            }
+          }
+        }
+      });
+    });
+    
     console.log('Tab URL monitoring set up');
   } else {
     console.error('Cannot access chrome.tabs API');

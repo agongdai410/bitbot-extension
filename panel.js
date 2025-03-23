@@ -136,6 +136,18 @@ document.addEventListener('DOMContentLoaded', () => {
     const iframe = currentActiveIframe === 'x' ? iframeX : iframeGmgn;
     
     if (history.current > 0) {
+      // Check current URL before navigation
+      const currentUrl = history.urls[history.current];
+      const previousUrl = history.urls[history.current - 1];
+      
+      // If navigating away from a token search on X, reset the token tracker
+      if (currentActiveIframe === 'x' && 
+          currentUrl && currentUrl.includes('search?q=') &&
+          (!previousUrl || !previousUrl.includes('search?q='))) {
+        console.log('Navigating away from token search, resetting lastDetectedToken');
+        lastDetectedToken = null;
+      }
+      
       history.current--;
       const url = history.urls[history.current];
       await loadIframe(iframe, url, `Loading previous page`, currentActiveIframe);
@@ -153,6 +165,18 @@ document.addEventListener('DOMContentLoaded', () => {
     const iframe = currentActiveIframe === 'x' ? iframeX : iframeGmgn;
     
     if (history.current < history.urls.length - 1) {
+      // Check current URL before navigation
+      const currentUrl = history.urls[history.current];
+      const nextUrl = history.urls[history.current + 1];
+      
+      // If navigating away from a token search on X, reset the token tracker
+      if (currentActiveIframe === 'x' && 
+          currentUrl && currentUrl.includes('search?q=') &&
+          (!nextUrl || !nextUrl.includes('search?q='))) {
+        console.log('Navigating away from token search, resetting lastDetectedToken');
+        lastDetectedToken = null;
+      }
+      
       history.current++;
       const url = history.urls[history.current];
       await loadIframe(iframe, url, `Loading next page`, currentActiveIframe);
@@ -309,6 +333,13 @@ document.addEventListener('DOMContentLoaded', () => {
       // Apply appropriate handler based on loaded URL
       if (url.includes('x.com')) {
         showNotification('Showing X.com', false);
+        
+        // If we're navigating to a non-search page in X.com, reset the lastDetectedToken
+        // so we can detect the same token again if needed
+        if (!url.includes('search?q=')) {
+          console.log('Resetting lastDetectedToken due to navigation to non-search X.com page');
+          lastDetectedToken = null;
+        }
       } else if (url.includes('gmgn.ai')) {
         showNotification('Showing pmgn.ai', false);
         // Try to bypass Cloudflare
@@ -570,20 +601,106 @@ document.addEventListener('DOMContentLoaded', () => {
         // Initialize with a notification
         showNotification('Panel ready', false);
         
-        // Wait for service worker to be fully active before loading x.com
-        setTimeout(() => {
-          // Only load X content after panel is fully initialized
-          loadIframe(iframeX, X_URL, 'Loading X.com', 'x');
-          // Add to history
-          addToHistory(X_URL, 'x');
-        }, 500);
+        // Check if current tab has a gmgn.ai token page
+        if (chrome && chrome.tabs) {
+          chrome.tabs.query({active: true, currentWindow: true}, async function(tabs) {
+            if (tabs && tabs.length > 0) {
+              const currentTab = tabs[0];
+              console.log('Current tab URL:', currentTab.url);
+              
+              if (currentTab.url && currentTab.url.includes('gmgn.ai') && currentTab.url.includes('/token/')) {
+                // Extract token address
+                const tokenAddress = extractContractAddress(currentTab.url);
+                if (tokenAddress) {
+                  console.log('Found token in active tab:', tokenAddress);
+                  lastDetectedToken = tokenAddress;
+                  
+                  // Save the gmgn.ai URL to history
+                  addToHistory(currentTab.url, 'gmgn');
+                  
+                  // Load X with token search
+                  const searchUrl = `https://x.com/search?q=${encodeURIComponent(tokenAddress)}`;
+                  await loadIframe(iframeX, searchUrl, `Searching for token on X.com`, 'x');
+                  addToHistory(searchUrl, 'x');
+                  
+                  // Show notification
+                  showNotification(`Searching for ${tokenAddress.slice(0, 8)}... on X`, false);
+                  return; // Skip the default X.com loading
+                }
+              }
+              
+              // Check if the current tab is NOT on x.com or gmgn.ai
+              const isNotXOrGmgn = currentTab.url && 
+                                  !currentTab.url.includes('x.com') && 
+                                  !currentTab.url.includes('twitter.com') && 
+                                  !currentTab.url.includes('gmgn.ai');
+              
+              if (isNotXOrGmgn) {
+                // Check if there's X.com browsing history
+                if (xHistory && xHistory.urls && xHistory.urls.length > 0 && xHistory.current >= 0) {
+                  // Get the last visited URL from X.com history
+                  const lastXUrl = xHistory.urls[xHistory.current];
+                  console.log('Loading last visited X URL from history:', lastXUrl);
+                  
+                  // Load the last visited X.com URL
+                  await loadIframe(iframeX, lastXUrl, 'Loading last visited X.com page', 'x');
+                  return; // Skip the default X.com loading
+                }
+              }
+              
+              // Default: load X.com homepage
+              loadIframe(iframeX, X_URL, 'Loading X.com', 'x');
+              addToHistory(X_URL, 'x');
+            } else {
+              // Fallback to default X.com if tabs API fails
+              loadIframe(iframeX, X_URL, 'Loading X.com', 'x');
+              addToHistory(X_URL, 'x');
+            }
+          });
+        } else {
+          // If tabs API is not available, try to load last X URL from history
+          if (xHistory && xHistory.urls && xHistory.urls.length > 0 && xHistory.current >= 0) {
+            // Get the last visited URL from X.com history
+            const lastXUrl = xHistory.urls[xHistory.current];
+            console.log('Loading last visited X URL from history (no tabs API):', lastXUrl);
+            setTimeout(() => {
+              loadIframe(iframeX, lastXUrl, 'Loading last visited X.com page', 'x');
+            }, 500);
+          } else {
+            // Fall back to default X.com
+            setTimeout(() => {
+              loadIframe(iframeX, X_URL, 'Loading X.com', 'x');
+              addToHistory(X_URL, 'x');
+            }, 500);
+          }
+        }
       } catch (error) {
         console.error('Service Worker registration failed:', error);
         showNotification('Service worker registration failed', true);
+        
+        // Try to load last X URL from history even if service worker fails
+        if (xHistory && xHistory.urls && xHistory.urls.length > 0 && xHistory.current >= 0) {
+          const lastXUrl = xHistory.urls[xHistory.current];
+          loadIframe(iframeX, lastXUrl, 'Loading last visited X.com page', 'x');
+        } else {
+          // Fall back to default X.com
+          loadIframe(iframeX, X_URL, 'Loading X.com', 'x');
+          addToHistory(X_URL, 'x');
+        }
       }
     } else {
       console.error('Service Workers are not supported in this browser.');
       showNotification('Service Workers not supported', true);
+      
+      // Try to load last X URL from history
+      if (xHistory && xHistory.urls && xHistory.urls.length > 0 && xHistory.current >= 0) {
+        const lastXUrl = xHistory.urls[xHistory.current];
+        loadIframe(iframeX, lastXUrl, 'Loading last visited X.com page', 'x');
+      } else {
+        // Fall back to default X.com
+        loadIframe(iframeX, X_URL, 'Loading X.com', 'x');
+        addToHistory(X_URL, 'x');
+      }
     }
   }
   
