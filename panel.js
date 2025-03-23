@@ -2,6 +2,7 @@
 document.addEventListener('DOMContentLoaded', () => {
   // Get DOM elements
   const btnRefresh = document.getElementById('btn-refresh');
+  const btnRetry = document.getElementById('retry-button');
   const btnXIcon = document.getElementById('btn-x-icon');
   const btnGmgnIcon = document.getElementById('btn-gmgn-icon');
   const btnBackward = document.getElementById('btn-backward');
@@ -283,6 +284,7 @@ document.addEventListener('DOMContentLoaded', () => {
     
     isLoadingInProgress = true;
     showLoading(true);
+    showFailedToLoadNotification(false); // Hide failed notification on new load attempt
     showNotification(loadingMessage, false);
     
     try {
@@ -328,6 +330,7 @@ document.addEventListener('DOMContentLoaded', () => {
       iframe.setAttribute('data-loaded', 'true');
       
       showLoading(false);
+      showFailedToLoadNotification(false); // Ensure failed notification is hidden on success
       isLoadingInProgress = false;
       
       // Apply appropriate handler based on loaded URL
@@ -374,6 +377,7 @@ document.addEventListener('DOMContentLoaded', () => {
         console.error(`Failed to load ${url} after ${MAX_RETRIES} attempts`);
         showNotification(`Failed to load ${url.includes('x.com') ? 'X.com' : 'pmgn.ai'}`, true);
         showLoading(false);
+        showFailedToLoadNotification(true); // Show failed notification after max retries
         isLoadingInProgress = false;
       }
     }
@@ -428,6 +432,14 @@ document.addEventListener('DOMContentLoaded', () => {
     const activeIframe = currentActiveIframe === 'x' ? iframeX : iframeGmgn;
     if (activeIframe) {
       activeIframe.style.opacity = show ? '0.3' : '1';
+    }
+  }
+  
+  // Show/hide failed to load notification
+  function showFailedToLoadNotification(show) {
+    const failedNotification = document.getElementById('failed-to-load-notification');
+    if (failedNotification) {
+      failedNotification.style.display = show ? 'flex' : 'none';
     }
   }
   
@@ -527,6 +539,7 @@ document.addEventListener('DOMContentLoaded', () => {
   btnXIcon.addEventListener('click', () => toggleIframeSource(true));
   btnGmgnIcon.addEventListener('click', () => toggleIframeSource(false));
   btnRefresh.addEventListener('click', refreshCurrentIframe);
+  btnRetry.addEventListener('click', refreshCurrentIframe);
   btnBackward.addEventListener('click', goBack);
   btnForward.addEventListener('click', goForward);
   btnSwap.addEventListener('click', () => {

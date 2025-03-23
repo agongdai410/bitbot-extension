@@ -14,6 +14,7 @@
       --border-color: #E1E8ED;
       --error-color: #E0245E;
       --green-color: #83D94F;
+      --gray-background: rgba(255, 255, 255, 0.18);
     }
 
     body {
@@ -26,6 +27,16 @@
       flex-direction: column;
       height: 100vh;
       overflow: hidden;
+    }
+
+    p {
+      margin: 5px 0;
+    }
+
+    .text-sm {
+      font-size: 14px;
+      color: rgba(255, 255, 255, 0.6);
+      font-weight: 400;
     }
 
     .header {
@@ -85,6 +96,41 @@
       position: relative;
       overflow: hidden;
       padding: 4px;
+    }
+
+    #failed-to-load-notification {
+      position: absolute;
+      z-index: 10;
+      top: 0;
+      left: 0;
+      width: 100%;
+      height: 100%;
+      display: flex;
+      flex-direction: column;
+      justify-content: center;
+      align-items: center;
+      background-color: #000000;
+      color: white;
+      text-align: center;
+      font-size: 16px;
+      display: none;
+    }
+
+    #failed-to-load-notification .failed-text {
+      margin: 20px;
+    }
+
+    #failed-to-load-notification #retry-button {
+      background-color: var(--gray-background);
+      border: none;
+      border-radius: 8px;
+      width: 160px;
+      height: 36px;
+      font-weight: 500;
+      font-size: 16px;
+      cursor: pointer;
+      line-height: 36px;
+      color: white;
     }
 
     iframe {
@@ -269,6 +315,15 @@
         <div class="loading-spinner"></div>
         <p class="loading-text">Loading content...</p>
       </div>
+    </div>
+
+    <div id="failed-to-load-notification">
+      <img src="icons/sweating.svg" alt="GMGN">
+      <div class="failed-text">
+        <p>Failed to load.</p>
+        <p class="text-sm">Unknown Error.</p>
+      </div>
+      <button id="retry-button">Retry</button>
     </div>
   </div>
 
