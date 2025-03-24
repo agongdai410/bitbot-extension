@@ -278,7 +278,7 @@ function injectDetectorCode() {
     const textElements = document.querySelectorAll('div, span, p, a, h1, h2, h3, h4, h5, h6');
     logToPanel(`Scanning ${textElements.length} text elements for CAs`);
     
-    const cas = [];
+    const visibleCAs = [];
     
     // Extract CAs from each element
     textElements.forEach(element => {
@@ -289,93 +289,87 @@ function injectDetectorCode() {
       
       // Get the position relative to the viewport
       const rect = element.getBoundingClientRect();
-      // Only process elements that are actually visible on screen (not preloaded content)
+      
+      // Only process elements that are actually visible on screen
       if (rect.top < window.innerHeight && rect.bottom > 0) {
         const text = element.textContent;
         const addresses = extractContractAddresses(text);
         
         if (addresses.length > 0) {
           addresses.forEach(address => {
-            // Only add new addresses that haven't been processed yet
-            if (!detectedCAs.has(address)) {
-              cas.push({
-                address: address,
-                element: element,
-                position: rect.top
-              });
-              detectedCAs.add(address);
-            }
+            // Calculate how much of the element is visible in the viewport (visibility score)
+            const visibleTop = Math.max(0, rect.top);
+            const visibleBottom = Math.min(window.innerHeight, rect.bottom);
+            const visibleHeight = Math.max(0, visibleBottom - visibleTop);
+            
+            // Calculate center distance from viewport center (for tiebreaker)
+            const elementCenter = (rect.top + rect.bottom) / 2;
+            const viewportCenter = window.innerHeight / 2;
+            const centerDistance = Math.abs(elementCenter - viewportCenter);
+            
+            visibleCAs.push({
+              address: address,
+              element: element,
+              position: rect.top,
+              visibleHeight: visibleHeight,
+              centerDistance: centerDistance
+            });
           });
         }
       }
     });
     
-    // Sort CAs by vertical position (top to bottom)
-    cas.sort((a, b) => a.position - b.position);
+    logToPanel(`Found ${visibleCAs.length} visible contract addresses`);
     
-    logToPanel(`Found ${cas.length} new contract addresses`);
-    
-    // Process the next unprocessed CA (if available)
-    processNextCA(cas);
+    // Process the most visible CA
+    findMostVisibleCA(visibleCAs);
   }
   
-  // Function to process the next CA in the list
-  function processNextCA(cas) {
-    if (cas.length === 0) {
-      logToPanel('No new contract addresses found');
-      return;
-    }
-    
-    // Filter to only include CAs that are currently visible
-    const visibleCAs = cas.filter(ca => {
-      const rect = ca.element.getBoundingClientRect();
-      return rect.top < window.innerHeight && rect.bottom > 0;
-    });
-    
+  // Function to find and process the most visible CA
+  function findMostVisibleCA(visibleCAs) {
     if (visibleCAs.length === 0) {
       logToPanel('No visible contract addresses found');
       return;
     }
     
-    // Find the next CA that's below the last processed one
-    let nextCA = null;
-    
-    if (!lastProcessedCA) {
-      // If this is the first scan, take the topmost CA
-      nextCA = visibleCAs[0];
-    } else {
-      // Find the next CA below the last processed one
-      for (const ca of visibleCAs) {
-        if (ca.position > lastProcessedCA.position) {
-          nextCA = ca;
-          break;
-        }
+    // Sort CAs by visibility score (most visible first) and then by center distance (closest to center first)
+    visibleCAs.sort((a, b) => {
+      // First compare by visible height
+      if (b.visibleHeight !== a.visibleHeight) {
+        return b.visibleHeight - a.visibleHeight;
       }
-      
-      // If no CA below the last one is found, don't change anything
-      if (!nextCA) {
-        logToPanel('No new CAs below the last processed one');
-        return;
-      }
-    }
+      // If tied on visible height, compare by distance from center
+      return a.centerDistance - b.centerDistance;
+    });
     
-    if (nextCA) {
-      logToPanel('Found new contract address: ' + nextCA.address);
-      lastProcessedCA = nextCA;
+    // Get the most visible CA
+    const mostVisibleCA = visibleCAs[0];
+    logToPanel(`Most visible CA: ${mostVisibleCA.address} (height: ${mostVisibleCA.visibleHeight}, center distance: ${mostVisibleCA.centerDistance.toFixed(2)})`);
+    
+    // Check if this is different from the last processed CA
+    const isSameAsLastCA = lastProcessedCA && 
+                          lastProcessedCA.address === mostVisibleCA.address &&
+                          Math.abs(lastProcessedCA.position - mostVisibleCA.position) < 10;
+    
+    if (!isSameAsLastCA) {
+      logToPanel(`Showing new most visible CA: ${mostVisibleCA.address}`);
+      lastProcessedCA = mostVisibleCA;
       
       // Highlight the element containing the CA (for debugging/visual feedback)
-      nextCA.element.style.border = '2px solid red';
+      mostVisibleCA.element.style.border = '2px solid red';
       
       // Send message to the extension
       try {
         chrome.runtime.sendMessage({
           action: 'caDetected',
-          contractAddress: nextCA.address,
+          contractAddress: mostVisibleCA.address,
           url: window.location.href
         });
       } catch (error) {
         logToPanel('Failed to send message to extension: ' + error);
       }
+    } else {
+      logToPanel('Most visible CA is the same as the last processed one, not sending again');
     }
   }
   
