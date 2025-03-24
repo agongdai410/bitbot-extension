@@ -244,6 +244,9 @@ function injectDetectorCode() {
   // Regular expression to match Solana contract addresses
   const CA_REGEX = /^[1-9A-HJ-NP-Za-km-z]{43,44}$/;
   
+  // Get extension URL for the SVG icon
+  const BITBOT_ICON_URL = chrome.runtime.getURL('icons/bitbot.svg');
+  
   // Log function that sends logs to the panel context
   function logToPanel(message) {
     chrome.runtime.sendMessage({ action: 'log', message });
@@ -404,16 +407,25 @@ function injectDetectorCode() {
     if (!isSameAsLastCA) {
       logToPanel(`Showing new most visible CA: ${mostVisibleCA.address}`);
       
-      // Remove highlight from the previous CA if it exists
-      if (lastProcessedCA && lastProcessedCA.element) {
-        lastProcessedCA.element.style.border = '';
+      // Remove previous highlight if it exists
+      if (lastProcessedCA) {
+        // Look for any previously highlighted spans and remove them
+        const highlightedSpans = document.querySelectorAll('.bitbot-ca-highlight');
+        highlightedSpans.forEach(span => {
+          // Unwrap the span (replace with its text content)
+          const parent = span.parentNode;
+          if (parent) {
+            const textNode = document.createTextNode(span.textContent);
+            parent.replaceChild(textNode, span);
+          }
+        });
       }
       
       // Update the last processed CA
       lastProcessedCA = mostVisibleCA;
       
-      // Highlight the element containing the current CA
-      mostVisibleCA.element.style.border = '2px solid red';
+      // Highlight the specific CA text within the element
+      highlightCAText(mostVisibleCA.element, mostVisibleCA.address);
       
       // Send message to the extension
       try {
@@ -428,6 +440,106 @@ function injectDetectorCode() {
     } else {
       logToPanel('Most visible CA is the same as the last processed one, not sending again');
     }
+  }
+  
+  // Function to highlight the specific CA text within an element
+  function highlightCAText(element, caAddress) {
+    // Find the text node containing the CA
+    const walker = document.createTreeWalker(
+      element, 
+      NodeFilter.SHOW_TEXT,
+      { acceptNode: node => node.textContent.includes(caAddress) ? NodeFilter.FILTER_ACCEPT : NodeFilter.FILTER_REJECT }
+    );
+    
+    const textNode = walker.nextNode();
+    if (!textNode) {
+      logToPanel('Could not find text node containing CA');
+      return;
+    }
+    
+    // Get the text content and index of the CA
+    const text = textNode.textContent;
+    const caIndex = text.indexOf(caAddress);
+    
+    if (caIndex === -1) {
+      logToPanel('Could not find CA in text node');
+      return;
+    }
+    
+    // Split the text node into before, CA, and after parts
+    const beforeText = text.substring(0, caIndex);
+    const afterText = text.substring(caIndex + caAddress.length);
+    
+    // Create the highlighted span for the CA
+    const highlightSpan = document.createElement('span');
+    highlightSpan.className = 'bitbot-ca-highlight';
+    highlightSpan.textContent = caAddress;
+    highlightSpan.style.cssText = 'border: 2px solid orange; border-radius: 4px; padding: 1px 2px; margin: 0 2px; display: inline-flex; align-items: center;';
+    
+    // Create Bitbot button
+    const button = document.createElement('button');
+    button.className = 'bitbot-ca-button';
+    button.style.cssText = 'background: linear-gradient(45deg, #ff8c00, #ff6347); color: white; border: none; border-radius: 4px; margin-left: 4px; padding: 1px 4px; font-size: 10px; cursor: pointer; display: inline-flex; align-items: center;';
+    
+    // Create icon for button
+    let iconElement;
+    
+    try {
+      // Try to create image element with SVG icon
+      const icon = document.createElement('img');
+      icon.src = BITBOT_ICON_URL || 'data:image/svg+xml;base64,PHN2ZyB4bWxucz0iaHR0cDovL3d3dy53My5vcmcvMjAwMC9zdmciIHdpZHRoPSIxNiIgaGVpZ2h0PSIxNiIgdmlld0JveD0iMCAwIDE2IDE2Ij48Y2lyY2xlIGN4PSI4IiBjeT0iOCIgcj0iNyIgZmlsbD0iI2ZmZiIvPjwvc3ZnPg==';
+      icon.alt = 'Bitbot';
+      icon.style.cssText = 'height: 12px; width: 12px; margin-right: 2px;';
+      icon.onerror = () => {
+        // If icon fails to load, replace with a simple circle
+        const fallbackIcon = document.createElement('span');
+        fallbackIcon.style.cssText = 'display: inline-block; width: 8px; height: 8px; background-color: white; border-radius: 50%; margin-right: 3px;';
+        button.replaceChild(fallbackIcon, icon);
+      };
+      iconElement = icon;
+    } catch (e) {
+      // Fallback to a simple circle if the icon creation fails
+      const fallbackIcon = document.createElement('span');
+      fallbackIcon.style.cssText = 'display: inline-block; width: 8px; height: 8px; background-color: white; border-radius: 50%; margin-right: 3px;';
+      iconElement = fallbackIcon;
+    }
+    
+    // Add text to button
+    const buttonText = document.createTextNode('Bitbot');
+    
+    // Assemble button
+    button.appendChild(iconElement);
+    button.appendChild(buttonText);
+    
+    // Add event handler to button
+    button.addEventListener('click', (e) => {
+      e.preventDefault();
+      e.stopPropagation();
+      
+      // Trigger the same action as when the CA is detected
+      chrome.runtime.sendMessage({
+        action: 'caDetected',
+        contractAddress: caAddress,
+        url: window.location.href
+      });
+    });
+    
+    // Add button to highlighted span
+    highlightSpan.appendChild(button);
+    
+    // Replace the original text node with our highlighted version
+    const parent = textNode.parentNode;
+    
+    // Create text nodes for before and after parts
+    const beforeNode = document.createTextNode(beforeText);
+    const afterNode = document.createTextNode(afterText);
+    
+    // Replace the original node with our three parts
+    parent.replaceChild(afterNode, textNode);
+    parent.insertBefore(highlightSpan, afterNode);
+    parent.insertBefore(beforeNode, highlightSpan);
+    
+    logToPanel('Successfully highlighted CA text with Bitbot button');
   }
   
   // Set up scroll event listener
@@ -533,10 +645,16 @@ function injectDetectorCode() {
       sendResponse({ scanning: true });
     }
     else if (message.action === 'forceScan') {
-      // Remove highlight from the previous CA if it exists
-      if (lastProcessedCA && lastProcessedCA.element) {
-        lastProcessedCA.element.style.border = '';
-      }
+      // Remove any previous CA highlights
+      const highlightedSpans = document.querySelectorAll('.bitbot-ca-highlight');
+      highlightedSpans.forEach(span => {
+        // Unwrap the span (replace with its text content)
+        const parent = span.parentNode;
+        if (parent) {
+          const textNode = document.createTextNode(span.textContent.replace(/Bitbot$/, ''));
+          parent.replaceChild(textNode, span);
+        }
+      });
       
       // Reset lastProcessedCA to ensure we find the topmost CA again
       lastProcessedCA = null;
