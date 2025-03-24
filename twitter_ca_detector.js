@@ -290,8 +290,19 @@ function injectDetectorCode() {
       // Get the position relative to the viewport
       const rect = element.getBoundingClientRect();
       
-      // Only process elements that are actually visible on screen
-      if (rect.top < window.innerHeight && rect.bottom > 0) {
+      // Only process elements that are actually visible on screen - strict visibility check
+      // Element must be substantially visible in the viewport (at least 50% of height or 50px minimum)
+      const visibleTop = Math.max(0, rect.top);
+      const visibleBottom = Math.min(window.innerHeight, rect.bottom);
+      const visibleHeight = Math.max(0, visibleBottom - visibleTop);
+      const elementHeight = rect.height;
+      
+      // Ensure element is meaningfully visible: either 50% of its height is visible or at least 50px is visible
+      const isSubstantiallyVisible = 
+        (visibleHeight >= elementHeight * 0.5) || // At least 50% visible
+        (visibleHeight >= 50); // Or at least 50 pixels visible
+      
+      if (visibleHeight > 0 && isSubstantiallyVisible) {
         const text = element.textContent;
         const addresses = extractContractAddresses(text);
         
@@ -332,8 +343,29 @@ function injectDetectorCode() {
       return;
     }
     
+    // Double-check that elements are still substantially visible (Twitter can have rapid DOM changes)
+    const confirmedVisibleCAs = visibleCAs.filter(ca => {
+      const rect = ca.element.getBoundingClientRect();
+      
+      // Calculate how much is visible right now
+      const visibleTop = Math.max(0, rect.top);
+      const visibleBottom = Math.min(window.innerHeight, rect.bottom);
+      const visibleHeight = Math.max(0, visibleBottom - visibleTop);
+      const elementHeight = rect.height;
+      
+      // More strict visibility check for final processing - must be in good viewing position
+      return (visibleHeight > 0) && 
+             ((visibleHeight >= elementHeight * 0.5) || (visibleHeight >= 50)) &&
+             (rect.top < window.innerHeight * 0.8); // Not near bottom edge of viewport
+    });
+    
+    if (confirmedVisibleCAs.length === 0) {
+      logToPanel('No substantially visible contract addresses found');
+      return;
+    }
+    
     // Sort CAs by visibility score (most visible first) and then by center distance (closest to center first)
-    visibleCAs.sort((a, b) => {
+    confirmedVisibleCAs.sort((a, b) => {
       // First compare by visible height
       if (b.visibleHeight !== a.visibleHeight) {
         return b.visibleHeight - a.visibleHeight;
@@ -343,7 +375,7 @@ function injectDetectorCode() {
     });
     
     // Get the most visible CA
-    const mostVisibleCA = visibleCAs[0];
+    const mostVisibleCA = confirmedVisibleCAs[0];
     logToPanel(`Most visible CA: ${mostVisibleCA.address} (height: ${mostVisibleCA.visibleHeight}, center distance: ${mostVisibleCA.centerDistance.toFixed(2)})`);
     
     // Check if this is different from the last processed CA
@@ -383,32 +415,37 @@ function injectDetectorCode() {
   // Set up scroll event listener
   function setupScrollListener() {
     logToPanel('Setting up scroll listener');
+    let scrollStoppedDuration = 0;
+    const SCROLL_SETTLE_TIME = 350; // ms to wait after scrolling stops to consider it "settled"
+    
     window.addEventListener('scroll', () => {
       isScrolling = true;
-      
-      // Check if we've scrolled more than 200px since last check
-      const currentScrollY = window.scrollY;
-      const hasScrolledSignificantly = Math.abs(currentScrollY - lastScrollY) > 200;
+      scrollStoppedDuration = 0; // Reset the duration whenever scrolling happens
       
       // Clear previous timeout
       if (scrollTimeout) {
         clearTimeout(scrollTimeout);
       }
       
-      // Set new timeout
+      // Set new timeout with two phases - first wait for brief pause
       scrollTimeout = setTimeout(() => {
-        isScrolling = false;
-        logToPanel('Scrolling stopped, scanning for new CAs...');
-        lastScrollY = currentScrollY;
-        scanForContractAddresses();
-      }, SCROLL_DELAY);
-      
-      // If we've scrolled significantly, scan immediately without waiting for stop
-      if (hasScrolledSignificantly) {
-        logToPanel('Significant scroll detected, scanning during scroll');
-        lastScrollY = currentScrollY;
-        scanForContractAddresses();
-      }
+        // First check if scroll has stopped for a short time
+        if (scrollStoppedDuration === 0) {
+          scrollStoppedDuration = Date.now();
+          
+          // Set another timeout to verify scrolling has fully settled
+          scrollTimeout = setTimeout(() => {
+            const timeSinceScrollStopped = Date.now() - scrollStoppedDuration;
+            
+            // Only proceed if we've been stopped for the settle time
+            if (timeSinceScrollStopped >= SCROLL_SETTLE_TIME) {
+              isScrolling = false;
+              logToPanel('Scrolling has fully stopped, scanning for CAs...');
+              scanForContractAddresses();
+            }
+          }, SCROLL_SETTLE_TIME);
+        }
+      }, 150);
     });
     
     // Also scan when the user interacts with the page

@@ -74,6 +74,11 @@ document.addEventListener('DOMContentLoaded', () => {
       // Show X iframe, hide GMGN iframe
       iframeX.classList.add('active');
       iframeGmgn.classList.remove('active');
+      
+      // Reset any inline styles that might interfere with visibility
+      iframeX.style.display = '';
+      iframeX.style.opacity = '1';
+      
       currentActiveIframe = 'x';
       
       // If X iframe hasn't been loaded yet, load it
@@ -91,6 +96,11 @@ document.addEventListener('DOMContentLoaded', () => {
       // Show GMGN iframe, hide X iframe
       iframeGmgn.classList.add('active');
       iframeX.classList.remove('active');
+      
+      // Reset any inline styles that might interfere with visibility
+      iframeGmgn.style.display = '';
+      iframeGmgn.style.opacity = '1';
+      
       currentActiveIframe = 'gmgn';
       
       // If GMGN iframe hasn't been loaded yet, load it
@@ -326,6 +336,47 @@ document.addEventListener('DOMContentLoaded', () => {
       
       // Set iframe source
       iframe.src = urlWithCacheBuster;
+      console.log(`Setting iframe source for ${iframeId} to: ${urlWithCacheBuster}`);
+      
+      // Add a MutationObserver to detect browser error pages
+      let errorDetectionObserver;
+      try {
+        errorDetectionObserver = new MutationObserver((mutations) => {
+          // Check if browser has injected its error page
+          if (iframe.contentDocument) {
+            const errorText = iframe.contentDocument.body?.innerText || '';
+            if (errorText.includes('unexpectedly closed the connection') || 
+                errorText.includes('refused to connect') ||
+                errorText.includes('ERR_CONNECTION_') ||
+                errorText.includes('failed to load')) {
+              console.log(`Detected browser error page in ${iframeId} iframe:`, errorText);
+              // Clear the observer since we found an error
+              errorDetectionObserver.disconnect();
+              // Show our custom error notification instead
+              showFailedToLoadNotification(true);
+              showLoading(false);
+            }
+          }
+        });
+        
+        // Start observing with a delay to allow iframe to start loading
+        setTimeout(() => {
+          try {
+            if (iframe.contentDocument) {
+              errorDetectionObserver.observe(iframe.contentDocument, { 
+                childList: true, 
+                subtree: true, 
+                characterData: true 
+              });
+            }
+          } catch (e) {
+            // CORS may prevent access to contentDocument
+            console.log('Could not set up error detection due to CORS');
+          }
+        }, 100);
+      } catch (e) {
+        console.log('Error setting up error detection:', e);
+      }
       
       // Set up load event for this attempt
       const loadPromise = new Promise((resolve, reject) => {
@@ -388,6 +439,17 @@ document.addEventListener('DOMContentLoaded', () => {
       }
     } catch (error) {
       console.warn(`Load attempt ${attempt} for ${url} failed:`, error);
+      
+      // Clean up error detection observer if it exists
+      if (errorDetectionObserver) {
+        errorDetectionObserver.disconnect();
+      }
+      
+      // Check if this is a connection error
+      const isConnectionError = 
+        error.message.includes('timeout') || 
+        error.message.includes('connection') ||
+        error.message.includes('network');
       
       if (attempt < MAX_RETRIES) {
         // Retry with backoff
@@ -468,6 +530,34 @@ document.addEventListener('DOMContentLoaded', () => {
     const failedNotification = document.getElementById('failed-to-load-notification');
     if (failedNotification) {
       failedNotification.style.display = show ? 'flex' : 'none';
+      
+      // Ensure the notification is on top of everything
+      failedNotification.style.zIndex = show ? '10000' : '10';
+    }
+    
+    // Get the active iframe
+    const activeIframe = currentActiveIframe === 'x' ? iframeX : iframeGmgn;
+    if (activeIframe) {
+      if (show) {
+        // When showing the error, apply opacity but don't hide completely
+        // This preserves the active/inactive iframe state from CSS
+        activeIframe.style.opacity = '0.1';
+        
+        // Optional: clear the src to prevent continued connection attempts
+        if (activeIframe.src.includes('gmgn.ai')) {
+          // Only do this for gmgn.ai which has connection issues
+          setTimeout(() => {
+            // Store the failed URL to retry later if needed
+            activeIframe.setAttribute('data-failed-url', activeIframe.src);
+            // Set to a blank page to stop the error
+            activeIframe.src = 'about:blank';
+          }, 100);
+        }
+      } else {
+        // Restore normal opacity but don't change display property
+        // The display property is controlled by the .active class
+        activeIframe.style.opacity = '1';
+      }
     }
   }
   
