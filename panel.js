@@ -120,6 +120,9 @@ document.addEventListener('DOMContentLoaded', () => {
     
     // Update navigation buttons state based on current iframe's history
     updateNavigationState();
+    
+    // Update swap button state when active iframe changes
+    updateSwapButtonState();
   }
   
   // Function to add URL to history
@@ -881,6 +884,26 @@ document.addEventListener('DOMContentLoaded', () => {
   // Initialize navigation buttons
   updateNavigationState();
   
+  // Initialize swap button state
+  updateSwapButtonState();
+  
+  // Monitor tab URL changes to update swap button state
+  chrome.tabs.onUpdated.addListener((tabId, changeInfo, tab) => {
+    if (changeInfo.status === 'complete') {
+      // Only update if it's the active tab
+      chrome.tabs.query({active: true, currentWindow: true}, (tabs) => {
+        if (tabs && tabs.length > 0 && tabs[0].id === tabId) {
+          updateSwapButtonState();
+        }
+      });
+    }
+  });
+  
+  // Monitor tab activation changes
+  chrome.tabs.onActivated.addListener(() => {
+    updateSwapButtonState();
+  });
+  
   // Initialize on load
   initServiceWorker();
   
@@ -951,9 +974,54 @@ document.addEventListener('DOMContentLoaded', () => {
       
       // Update navigation state
       updateNavigationState();
+      
+      // After swapping, update the swap button state
+      setTimeout(() => {
+        updateSwapButtonState();
+      }, 500);
     } catch (error) {
       console.error('Error swapping content:', error);
       showNotification('Failed to swap content', true);
+    }
+  }
+  
+  // Function to update the swap button state (enabled/disabled)
+  async function updateSwapButtonState() {
+    try {
+      // Get current tab's URL
+      const tabs = await chrome.tabs.query({active: true, currentWindow: true});
+      if (!tabs || !tabs.length) {
+        console.warn('Could not access current tab');
+        btnSwap.disabled = true;
+        btnSwap.style.opacity = '0.5';
+        return;
+      }
+      
+      const currentTab = tabs[0];
+      const mainWindowUrl = currentTab.url;
+      
+      // Check if main window has either x.com or gmgn.ai content
+      const isMainWindowX = mainWindowUrl && (mainWindowUrl.includes('x.com') || mainWindowUrl.includes('twitter.com'));
+      const isMainWindowGmgn = mainWindowUrl && mainWindowUrl.includes('gmgn.ai');
+      
+      // Get current panel content
+      const isPanelX = currentActiveIframe === 'x';
+      const isPanelGmgn = currentActiveIframe === 'gmgn';
+      
+      // Enable swap only if there's a meaningful swap possible (X <-> gmgn)
+      const canSwap = (isMainWindowX && isPanelGmgn) || (isMainWindowGmgn && isPanelX);
+      
+      // Update button state
+      btnSwap.disabled = !canSwap;
+      btnSwap.style.opacity = canSwap ? '1' : '0.5';
+      
+      console.log(`Swap button ${canSwap ? 'enabled' : 'disabled'}: Main window: ${
+        isMainWindowX ? 'X' : isMainWindowGmgn ? 'gmgn' : 'other'}, Panel: ${isPanelX ? 'X' : 'gmgn'}`);
+      
+    } catch (error) {
+      console.error('Error updating swap button state:', error);
+      btnSwap.disabled = true;
+      btnSwap.style.opacity = '0.5';
     }
   }
 }); 
