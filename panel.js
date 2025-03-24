@@ -62,6 +62,10 @@ document.addEventListener('DOMContentLoaded', () => {
       return;
     }
     
+    // Before toggling, save the current active iframe's state
+    const oldIframeId = currentActiveIframe;
+    const oldHistory = oldIframeId === 'x' ? xHistory : gmgnHistory;
+    
     // Update button states
     if (showX) {
       btnXIcon.classList.add('active');
@@ -99,7 +103,12 @@ document.addEventListener('DOMContentLoaded', () => {
       }
     }
     
-    // Update navigation buttons state
+    // Log the history transition for debugging
+    console.log(`Switched from ${oldIframeId} to ${currentActiveIframe}`);
+    console.log(`${oldIframeId} history:`, oldHistory);
+    console.log(`${currentActiveIframe} history:`, currentActiveIframe === 'x' ? xHistory : gmgnHistory);
+    
+    // Update navigation buttons state based on current iframe's history
     updateNavigationState();
   }
   
@@ -110,6 +119,12 @@ document.addEventListener('DOMContentLoaded', () => {
     // If we're not at the end of history, truncate the future entries
     if (history.current < history.urls.length - 1) {
       history.urls = history.urls.slice(0, history.current + 1);
+    }
+    
+    // Skip adding if URL is identical to the last entry (prevent consecutive duplicates)
+    if (history.urls.length > 0 && history.urls[history.current] === url) {
+      console.log(`Skipping duplicate history entry: ${url}`);
+      return;
     }
     
     // Add the new URL
@@ -133,9 +148,11 @@ document.addEventListener('DOMContentLoaded', () => {
   
   // Function to navigate back
   async function goBack() {
+    // Get history and iframe based on current active one
     const history = currentActiveIframe === 'x' ? xHistory : gmgnHistory;
     const iframe = currentActiveIframe === 'x' ? iframeX : iframeGmgn;
     
+    // Only allow navigation if we're not at the beginning of this iframe's history
     if (history.current > 0) {
       // Check current URL before navigation
       const currentUrl = history.urls[history.current];
@@ -162,9 +179,11 @@ document.addEventListener('DOMContentLoaded', () => {
   
   // Function to navigate forward
   async function goForward() {
+    // Get history and iframe based on current active one
     const history = currentActiveIframe === 'x' ? xHistory : gmgnHistory;
     const iframe = currentActiveIframe === 'x' ? iframeX : iframeGmgn;
     
+    // Only allow navigation if we're not at the end of this iframe's history
     if (history.current < history.urls.length - 1) {
       // Check current URL before navigation
       const currentUrl = history.urls[history.current];
@@ -200,6 +219,15 @@ document.addEventListener('DOMContentLoaded', () => {
     // Update forward button
     btnForward.disabled = history.current >= history.urls.length - 1;
     btnForward.style.opacity = history.current >= history.urls.length - 1 ? '0.5' : '1';
+    
+    // Log current navigation state for debugging
+    console.log(`Navigation state updated for ${currentActiveIframe}:`);
+    console.log(`  Current position: ${history.current + 1}/${history.urls.length}`);
+    console.log(`  Backward button: ${btnBackward.disabled ? 'disabled' : 'enabled'}`);
+    console.log(`  Forward button: ${btnForward.disabled ? 'disabled' : 'enabled'}`);
+    if (history.urls.length > 0) {
+      console.log(`  Current URL: ${history.urls[history.current]}`);
+    }
   }
   
   // Function to go home (load the default page for current iframe)
@@ -610,6 +638,9 @@ document.addEventListener('DOMContentLoaded', () => {
         console.log('Switching to new CA page:', event.data.contractAddress);
         lastDetectedToken = event.data.contractAddress;
         
+        // Remember previous active iframe
+        const previousActiveIframe = currentActiveIframe;
+        
         // Switch to gmgn iframe and load the token page
         btnGmgnIcon.classList.add('active');
         btnXIcon.classList.remove('active');
@@ -617,9 +648,14 @@ document.addEventListener('DOMContentLoaded', () => {
         iframeX.classList.remove('active');
         currentActiveIframe = 'gmgn';
         
-        // Load the gmgn.ai token page
+        // Load the gmgn.ai token page 
         loadIframe(iframeGmgn, gmgnUrl, `Loading token on gmgn.ai`, 'gmgn');
+        
+        // Add to gmgn history - importantly, we use 'gmgn' as the iframe ID to keep histories separate
         addToHistory(gmgnUrl, 'gmgn');
+        
+        console.log(`Switched from ${previousActiveIframe} to gmgn for CA: ${event.data.contractAddress}`);
+        console.log('Current gmgn history:', gmgnHistory);
         
         // Update navigation state
         updateNavigationState();
