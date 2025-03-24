@@ -274,19 +274,37 @@ function injectDetectorCode() {
   function scanForContractAddresses() {
     logToPanel('Scanning page for contract addresses...');
     
-    // Get all elements that might contain text - be more thorough
-    const textElements = document.querySelectorAll('div, span, p, a, h1, h2, h3, h4, h5, h6');
-    logToPanel(`Scanning ${textElements.length} text elements for CAs`);
+    // First get all text-containing elements
+    const allTextElements = document.querySelectorAll('div, span, p, a, h1, h2, h3, h4, h5, h6');
+    logToPanel(`Found ${allTextElements.length} total text elements`);
+    
+    // Filter to focus on leaf-like nodes - elements that either:
+    // 1. Have no children with text content
+    // 2. Have minimal nesting and contain contract addresses themselves
+    const leafElements = Array.from(allTextElements).filter(el => {
+      // Skip invisible elements early
+      if (el.offsetParent === null) {
+        return false;
+      }
+      
+      // Check if this element has text directly in it (not just in children)
+      const directText = Array.from(el.childNodes)
+        .filter(node => node.nodeType === Node.TEXT_NODE)
+        .map(node => node.textContent.trim())
+        .join('');
+        
+      // Either it has direct text containing numbers (potential CA)
+      // or it has no child elements with their own text
+      return (directText.match(/[0-9]+/) && directText.length > 10) || 
+             (el.children.length === 0 && el.textContent.trim().length > 0);
+    });
+    
+    logToPanel(`Filtered to ${leafElements.length} leaf-like elements for CA scanning`);
     
     const visibleCAs = [];
     
-    // Extract CAs from each element
-    textElements.forEach(element => {
-      // Skip hidden elements
-      if (element.offsetParent === null) {
-        return;
-      }
-      
+    // Process only the filtered leaf elements
+    leafElements.forEach(element => {
       // Get the position relative to the viewport
       const rect = element.getBoundingClientRect();
       
