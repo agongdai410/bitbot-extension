@@ -595,6 +595,41 @@ document.addEventListener('DOMContentLoaded', () => {
         showNotification(`Searching for ${event.data.tokenAddress.slice(0, 8)}... on X`, false);
       }
     }
+    else if (event.data.type === 'CA_DETECTED') {
+      console.log('Contract address detected on X.com:', event.data.contractAddress);
+      
+      // Create gmgn.ai token URL
+      const gmgnUrl = `https://gmgn.ai/sol/token/${event.data.contractAddress}`;
+      
+      // Always process newly detected CAs from scrolling, even if they were seen before
+      // Just check if it's the same as the currently displayed one
+      const currentGmgnUrl = iframeGmgn.src;
+      const isShowingThisCA = currentGmgnUrl && currentGmgnUrl.includes(event.data.contractAddress);
+      
+      if (!isShowingThisCA) {
+        console.log('Switching to new CA page:', event.data.contractAddress);
+        lastDetectedToken = event.data.contractAddress;
+        
+        // Switch to gmgn iframe and load the token page
+        btnGmgnIcon.classList.add('active');
+        btnXIcon.classList.remove('active');
+        iframeGmgn.classList.add('active');
+        iframeX.classList.remove('active');
+        currentActiveIframe = 'gmgn';
+        
+        // Load the gmgn.ai token page
+        loadIframe(iframeGmgn, gmgnUrl, `Loading token on gmgn.ai`, 'gmgn');
+        addToHistory(gmgnUrl, 'gmgn');
+        
+        // Update navigation state
+        updateNavigationState();
+        
+        // Show notification
+        showNotification(`Loading ${event.data.contractAddress.slice(0, 8)}... on gmgn.ai`, false);
+      } else {
+        console.log('Already showing this CA, no need to reload');
+      }
+    }
   });
   
   // Initialize service worker

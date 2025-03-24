@@ -101,7 +101,8 @@ self.addEventListener('activate', (event) => {
 
 // Listen for messages from panel.js
 self.addEventListener('message', async (event) => {
-  // Handle URL loading messages
+  console.log('Service worker received message:', event.data);
+
   if (event.data && (event.data.type === 'LOAD_URL' || event.data.type === 'PREPARE_URL' || event.data.type === 'loading-page')) {
     const url = event.data.url;
     const messageId = event.data.messageId;  // Will be undefined for LOAD_URL messages
@@ -178,6 +179,62 @@ self.addEventListener('message', async (event) => {
         });
       }
     }
+  }
+  else if (event.data && event.data.type === 'CA_DETECTED') {
+    console.log('Service worker received CA_DETECTED message:', event.data);
+    
+    try {
+      // Forward the message to all panel clients
+      const matchedClients = await clients.matchAll({ type: 'window' });
+      console.log(`Found ${matchedClients.length} clients to forward CA_DETECTED message to`);
+      
+      for (const client of matchedClients) {
+        console.log('Forwarding CA message to client:', client.url);
+        client.postMessage({
+          type: 'CA_DETECTED',
+          contractAddress: event.data.contractAddress,
+          sourceUrl: event.data.url
+        });
+      }
+      
+      // Return a response if the sender is expecting one
+      if (event.ports && event.ports[0]) {
+        event.ports[0].postMessage({ success: true });
+      }
+    } catch (error) {
+      console.error('Error forwarding CA_DETECTED message:', error);
+    }
+  }
+});
+
+// Handle external messages from content scripts too
+chrome.runtime.onMessage.addListener((message, sender, sendResponse) => {
+  console.log('Service worker received runtime message:', message);
+  
+  if (message && message.type === 'CA_DETECTED') {
+    console.log('Runtime message about CA detection:', message);
+    
+    // Process the message
+    clients.matchAll({ type: 'window' }).then((matchedClients) => {
+      console.log(`Found ${matchedClients.length} clients to forward runtime CA message to`);
+      
+      matchedClients.forEach((client) => {
+        client.postMessage({
+          type: 'CA_DETECTED',
+          contractAddress: message.contractAddress,
+          sourceUrl: message.url
+        });
+      });
+      
+      // Send response
+      sendResponse({ success: true });
+    }).catch(error => {
+      console.error('Error processing runtime CA message:', error);
+      sendResponse({ success: false, error: error.message });
+    });
+    
+    // Return true to indicate we'll send a response asynchronously
+    return true;
   }
 });
 

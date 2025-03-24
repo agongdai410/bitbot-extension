@@ -1,29 +1,28 @@
 {
   "manifest_version": 3,
-  "name": "Web Viewer Extension",
+  "name": "Bitbot X Panel",
   "version": "1.0",
-  "description": "View any website in a side panel frame",
+  "description": "View Twitter & gmgn.ai in a side panel",
   "permissions": [
     "sidePanel",
-    "storage",
+    "declarativeNetRequest",
+    "declarativeNetRequestWithHostAccess",
     "tabs",
-    "declarativeNetRequestWithHostAccess"
+    "activeTab",
+    "storage",
+    "scripting"
   ],
   "host_permissions": [
-    "https://*.x.com/*",
-    "https://x.com/*",
-    "https://*.twitter.com/*",
-    "https://twitter.com/*",
-    "https://*.twimg.com/*",
-    "https://*.gmgn.ai/*",
-    "https://gmgn.ai/*"
+    "*://*.twitter.com/*",
+    "*://*.x.com/*",
+    "*://*.gmgn.ai/*",
+    "*://*.cloudflare.com/*"
   ],
   "side_panel": {
     "default_path": "panel.html"
   },
   "background": {
-    "service_worker": "fetch_service_worker.js",
-    "type": "module"
+    "service_worker": "fetch_service_worker.js"
   },
   "content_security_policy": {
     "extension_pages": "script-src 'self'; object-src 'self'; frame-src *"
@@ -49,7 +48,7 @@
     "128": "icons/icon128.png"
   },
   "action": {
-    "default_title": "Web Viewer",
+    "default_title": "Open BitBot Side Panel",
     "default_popup": "popup.html",
     "default_icon": {
       "16": "icons/icon16.png",
