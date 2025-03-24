@@ -353,9 +353,16 @@ function injectDetectorCode() {
     
     if (!isSameAsLastCA) {
       logToPanel(`Showing new most visible CA: ${mostVisibleCA.address}`);
+      
+      // Remove highlight from the previous CA if it exists
+      if (lastProcessedCA && lastProcessedCA.element) {
+        lastProcessedCA.element.style.border = '';
+      }
+      
+      // Update the last processed CA
       lastProcessedCA = mostVisibleCA;
       
-      // Highlight the element containing the CA (for debugging/visual feedback)
+      // Highlight the element containing the current CA
       mostVisibleCA.element.style.border = '2px solid red';
       
       // Send message to the extension
@@ -471,6 +478,11 @@ function injectDetectorCode() {
       sendResponse({ scanning: true });
     }
     else if (message.action === 'forceScan') {
+      // Remove highlight from the previous CA if it exists
+      if (lastProcessedCA && lastProcessedCA.element) {
+        lastProcessedCA.element.style.border = '';
+      }
+      
       // Reset lastProcessedCA to ensure we find the topmost CA again
       lastProcessedCA = null;
       logToPanel('Forced scan triggered, searching for CAs from the top');
