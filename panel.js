@@ -570,9 +570,9 @@ document.addEventListener('DOMContentLoaded', () => {
   btnRetry.addEventListener('click', refreshCurrentIframe);
   btnBackward.addEventListener('click', goBack);
   btnForward.addEventListener('click', goForward);
-  btnSwap.addEventListener('click', () => {
-    // Toggle between X and pmgn.ai
-    toggleIframeSource(currentActiveIframe === 'gmgn');
+  btnSwap.addEventListener('click', async () => {
+    // Swap content between main browser window and side panel
+    await swapWithMainWindow();
   });
   btnSettings.addEventListener('click', () => {
     showNotification('Settings feature coming soon', false);
@@ -796,4 +796,74 @@ document.addEventListener('DOMContentLoaded', () => {
   
   // Debug message to confirm panel script initialized
   console.log('Panel script initialized');
+  
+  // Function to swap content between main window and side panel
+  async function swapWithMainWindow() {
+    // Get the active iframe and its URL
+    const activeIframe = currentActiveIframe === 'x' ? iframeX : iframeGmgn;
+    const iframeUrl = activeIframe.src;
+    
+    if (!iframeUrl || iframeUrl === 'about:blank') {
+      showNotification('No content to swap', true);
+      return;
+    }
+    
+    try {
+      // Get current tab's URL
+      const tabs = await chrome.tabs.query({active: true, currentWindow: true});
+      if (!tabs || !tabs.length) {
+        showNotification('Could not access current tab', true);
+        return;
+      }
+      
+      const currentTab = tabs[0];
+      const mainWindowUrl = currentTab.url;
+      
+      // Only proceed if we have valid URLs
+      if (!mainWindowUrl) {
+        showNotification('Invalid main window URL', true);
+        return;
+      }
+      
+      // Navigate main window to iframe URL
+      await chrome.tabs.update(currentTab.id, { url: iframeUrl });
+      showNotification('Swapped content with main window', false);
+      
+      // Load main window URL in the appropriate iframe based on domain
+      const isXUrl = mainWindowUrl.includes('x.com') || mainWindowUrl.includes('twitter.com');
+      const isGmgnUrl = mainWindowUrl.includes('gmgn.ai');
+      
+      if (isXUrl) {
+        // Switch to X iframe if needed
+        if (currentActiveIframe !== 'x') {
+          await toggleIframeSource(true);
+        }
+        await loadIframe(iframeX, mainWindowUrl, 'Loading main window content', 'x');
+        addToHistory(mainWindowUrl, 'x');
+      } else if (isGmgnUrl) {
+        // Switch to GMGN iframe if needed
+        if (currentActiveIframe !== 'gmgn') {
+          await toggleIframeSource(false);
+        }
+        await loadIframe(iframeGmgn, mainWindowUrl, 'Loading main window content', 'gmgn');
+        addToHistory(mainWindowUrl, 'gmgn');
+      } else {
+        // For other URLs, load in the current active iframe
+        showNotification('Loading main window content in current panel', false);
+        await loadIframe(
+          activeIframe, 
+          mainWindowUrl, 
+          'Loading main window content', 
+          currentActiveIframe
+        );
+        addToHistory(mainWindowUrl, currentActiveIframe);
+      }
+      
+      // Update navigation state
+      updateNavigationState();
+    } catch (error) {
+      console.error('Error swapping content:', error);
+      showNotification('Failed to swap content', true);
+    }
+  }
 }); 
