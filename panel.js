@@ -271,10 +271,26 @@ document.addEventListener('DOMContentLoaded', () => {
   // Function to extract contract address from gmgn.ai token URL
   function extractContractAddress(url) {
     // URL pattern: https://gmgn.ai/sol/token/CONTRACT_ADDRESS
+    // or https://gmgn.ai/sol/token/[referral_code]_[CA]
     const matches = url.match(/\/token\/([^\/\?#]+)/);
     if (matches && matches[1]) {
-      return matches[1];
+      const tokenPart = matches[1];
+      console.log('Extracted token part from URL:', tokenPart);
+      
+      // Check if the token part contains a referral code (separated by underscore)
+      if (tokenPart.includes('_')) {
+        // Split by underscore and take the last part which is the actual CA
+        const parts = tokenPart.split('_');
+        const actualCA = parts[parts.length - 1];
+        console.log('URL contains referral code, extracted actual CA:', actualCA);
+        return actualCA;
+      }
+      
+      // If no underscore is found, return the whole token part
+      console.log('No referral code found, using full token:', tokenPart);
+      return tokenPart;
     }
+    console.log('No token found in URL:', url);
     return null;
   }
   
@@ -582,7 +598,7 @@ document.addEventListener('DOMContentLoaded', () => {
       notification.style.opacity = '0';
     }, duration);
   }
-  
+
   // Function to bypass Cloudflare frame-busting
   function bypassCloudflare(iframe) {
     try {
@@ -887,13 +903,36 @@ document.addEventListener('DOMContentLoaded', () => {
   // Initialize swap button state
   updateSwapButtonState();
   
-  // Monitor tab URL changes to update swap button state
+  // Monitor tab URL changes to update swap button state and handle token navigation
   chrome.tabs.onUpdated.addListener((tabId, changeInfo, tab) => {
     if (changeInfo.status === 'complete') {
       // Only update if it's the active tab
       chrome.tabs.query({active: true, currentWindow: true}, (tabs) => {
         if (tabs && tabs.length > 0 && tabs[0].id === tabId) {
+          // Update swap button state
           updateSwapButtonState();
+          
+          // Check if the current tab is a gmgn.ai token page
+          const tabUrl = tabs[0].url;
+          if (tabUrl && tabUrl.includes('gmgn.ai') && tabUrl.includes('/token/')) {
+            console.log('Detected gmgn token page in main browser window:', tabUrl);
+            
+            // Extract token address - properly handle referral codes
+            const tokenAddress = extractContractAddress(tabUrl);
+            if (tokenAddress && tokenAddress !== lastDetectedToken) {
+              console.log('New token detected in main browser window:', tokenAddress);
+              lastDetectedToken = tokenAddress;
+              
+              // Save the gmgn.ai URL to history
+              addToHistory(tabUrl, 'gmgn');
+              
+              // Automatically search for this token on X if enabled
+              searchTokenOnX(tokenAddress);
+              
+              // Show notification
+              showNotification(`Searching for ${tokenAddress.slice(0, 8)}... on X`, false);
+            }
+          }
         }
       });
     }

@@ -102,7 +102,7 @@ self.addEventListener('activate', (event) => {
 // Listen for messages from panel.js
 self.addEventListener('message', async (event) => {
   console.log('Service worker received message:', event.data);
-
+  
   if (event.data && (event.data.type === 'LOAD_URL' || event.data.type === 'PREPARE_URL' || event.data.type === 'loading-page')) {
     const url = event.data.url;
     const messageId = event.data.messageId;  // Will be undefined for LOAD_URL messages
@@ -127,8 +127,8 @@ self.addEventListener('message', async (event) => {
         
         // For Twitter/X domains, try to get a guest token
         if (TWITTER_DOMAINS.some(domain => parsedUrl.hostname.includes(domain))) {
-          if (!guestToken) {
-            await getGuestToken();
+        if (!guestToken) {
+          await getGuestToken();
           }
         }
         
@@ -160,13 +160,13 @@ self.addEventListener('message', async (event) => {
         // If this was a PREPARE_URL message, send response that rules are ready
         if ((event.data.type === 'PREPARE_URL' || event.data.type === 'loading-page') && event.source) {
           console.log('Sending RULES_READY response for messageId:', messageId);
-          event.source.postMessage({
+      event.source.postMessage({
             type: 'RULES_READY',
             messageId: messageId,
             iframeId: iframeId
-          });
-        }
-      }
+      });
+    }
+  }
     } catch (e) {
       console.error('Error parsing URL:', e);
       
@@ -886,11 +886,11 @@ async function handleCloudflareRequest(event, url) {
       newHeaders.set('X-Frame-Options-Modified', 'true');
       
       return new Response(modifiedText, {
-        status: response.status,
-        statusText: response.statusText,
+          status: response.status,
+          statusText: response.statusText,
         headers: newHeaders
-      });
-    }
+        });
+      }
     
     // For non-HTML responses, just remove security headers
     const newHeaders = new Headers(response.headers);
