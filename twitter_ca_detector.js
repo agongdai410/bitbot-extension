@@ -398,11 +398,12 @@ function injectDetectorCode() {
               element: link,
               position: rect.top,
               visibleHeight: visibleHeight,
-              centerDistance: centerDistance
+              centerDistance: centerDistance,
+              isLink: true // Add flag to identify this as a link CA
             });
             
-            // Highlight the link element containing the CA
-            highlightLinkWithCA(link, address);
+            // NOTE: Removed immediate highlighting - will do it after unified selection
+            // highlightLinkWithCA(link, address);
           });
           
           // Once we found CAs in this link, no need to check other sources
@@ -428,11 +429,12 @@ function injectDetectorCode() {
               element: link,
               position: rect.top,
               visibleHeight: visibleHeight,
-              centerDistance: centerDistance
+              centerDistance: centerDistance,
+              isLink: true // Add flag to identify this as a link CA
             });
             
-            // Highlight the link element containing the CA
-            highlightLinkWithCA(link, address);
+            // NOTE: Removed immediate highlighting - will do it after unified selection
+            // highlightLinkWithCA(link, address);
           });
         }
       }
@@ -440,10 +442,8 @@ function injectDetectorCode() {
     
     logToPanel(`Special link scanning processed ${linkElements.length} links, found CAs in ${processedCount} links`);
     
-    // Process any CAs found
-    if (visibleCAs.length > 0) {
-      findMostVisibleCA(visibleCAs);
-    }
+    // Return the collected CAs instead of processing them here
+    return visibleCAs;
   }
   
   // Function to extract a clean URL from a link element by removing HTML tags
@@ -587,12 +587,17 @@ function injectDetectorCode() {
     logToPanel('Scanning page for contract addresses...');
     
     // First handle special case: links that contain partial CAs
-    scanLinksForPartialCAs();
+    const linkCAs = scanLinksForPartialCAs() || [];
+    logToPanel(`Found ${linkCAs.length} potential CAs in links`);
     
     // Get the main element - focus our search on the main content area
     const mainElement = document.querySelector('main');
     if (!mainElement) {
       logToPanel('No main element found, skipping text scan');
+      // Even if main is not found, we should still process any link CAs we found
+      if (linkCAs.length > 0) {
+        findMostVisibleCA(linkCAs);
+      }
       return;
     }
     
@@ -675,7 +680,7 @@ function injectDetectorCode() {
     
     logToPanel(`Filtered to ${leafElements.length} leaf-like elements for CA scanning`);
     
-    const visibleCAs = [];
+    const textCAs = [];
     
     // Process only the filtered leaf elements
     leafElements.forEach(element => {
@@ -710,22 +715,31 @@ function injectDetectorCode() {
             const viewportCenter = window.innerHeight / 2;
             const centerDistance = Math.abs(elementCenter - viewportCenter);
             
-            visibleCAs.push({
+            textCAs.push({
               address: address,
               element: element,
               position: rect.top,
               visibleHeight: visibleHeight,
-              centerDistance: centerDistance
+              centerDistance: centerDistance,
+              isLink: false // Add flag to identify this as NOT a link CA
             });
           });
         }
       }
     });
     
-    logToPanel(`Found ${visibleCAs.length} visible contract addresses`);
+    logToPanel(`Found ${textCAs.length} visible contract addresses in text`);
     
-    // Process the most visible CA
-    findMostVisibleCA(visibleCAs);
+    // Combine link CAs and text CAs for unified processing
+    const allVisibleCAs = [...linkCAs, ...textCAs];
+    logToPanel(`Total CAs found: ${allVisibleCAs.length} (${linkCAs.length} in links, ${textCAs.length} in text)`);
+    
+    // Process the most visible CA from all sources
+    if (allVisibleCAs.length > 0) {
+      findMostVisibleCA(allVisibleCAs);
+    } else {
+      logToPanel('No visible contract addresses found');
+    }
   }
   
   // Function to find and process the most visible CA
@@ -808,7 +822,9 @@ function injectDetectorCode() {
   
   // Helper function to process the selected CA
   function processSelectedCA(ca) {
-    logToPanel(`Processing CA: ${ca.address} (height: ${ca.visibleHeight}, center distance: ${ca.centerDistance.toFixed(2)})`);
+    if (!ca) return;
+    
+    logToPanel(`Processing CA: ${ca.address} (height: ${ca.visibleHeight}, center distance: ${ca.centerDistance.toFixed(2)}, isLink: ${ca.isLink})`);
     
     // Check if this is different from the last processed CA
     const isSameAsLastCA = lastProcessedCA && 
@@ -827,8 +843,12 @@ function injectDetectorCode() {
       // Update the last processed CA
       lastProcessedCA = ca;
       
-      // Highlight the specific CA text within the element
-      highlightCAText(ca.element, ca.address);
+      // Highlight based on whether this is a link or text CA
+      if (ca.isLink) {
+        highlightLinkWithCA(ca.element, ca.address);
+      } else {
+        highlightCAText(ca.element, ca.address);
+      }
       
       // Send message to the extension
       try {
@@ -1067,12 +1087,9 @@ function injectDetectorCode() {
   // Set up scroll event listener
   function setupScrollListener() {
     logToPanel('Setting up scroll listener');
-    let scrollStoppedDuration = 0;
-    const SCROLL_SETTLE_TIME = 350; // ms to wait after scrolling stops to consider it "settled"
     
     window.addEventListener('scroll', () => {
       isScrolling = true;
-      scrollStoppedDuration = 0; // Reset the duration whenever scrolling happens
       
       // Detect scroll direction
       const currentScrollY = window.scrollY;
@@ -1084,25 +1101,12 @@ function injectDetectorCode() {
         clearTimeout(scrollTimeout);
       }
       
-      // Set new timeout with two phases - first wait for brief pause
+      // Set timeout to scan exactly 300ms after scrolling stops
       scrollTimeout = setTimeout(() => {
-        // First check if scroll has stopped for a short time
-        if (scrollStoppedDuration === 0) {
-          scrollStoppedDuration = Date.now();
-          
-          // Set another timeout to verify scrolling has fully settled
-          scrollTimeout = setTimeout(() => {
-            const timeSinceScrollStopped = Date.now() - scrollStoppedDuration;
-            
-            // Only proceed if we've been stopped for the settle time
-            if (timeSinceScrollStopped >= SCROLL_SETTLE_TIME) {
-              isScrolling = false;
-              logToPanel(`Scrolling has fully stopped (direction: ${scrollDirection}), scanning for CAs...`);
-              scanForContractAddresses();
-            }
-          }, SCROLL_SETTLE_TIME);
-        }
-      }, 150);
+        isScrolling = false;
+        logToPanel(`Scrolling has stopped (direction: ${scrollDirection}), scanning for CAs after 300ms delay...`);
+        scanForContractAddresses();
+      }, 300);
     });
     
     // Also scan when the user interacts with the page
@@ -1154,15 +1158,12 @@ function injectDetectorCode() {
     });
   }
   
-  // Periodically scan for CAs, in case scroll or mutation events miss some
+  // Periodic scanner function - disabled as per requirement
   function setupPeriodicScanner() {
-    logToPanel('Setting up periodic scanner');
-    setInterval(() => {
-      if (!isScrolling) {
-        logToPanel('Running periodic scan for CAs...');
-        scanForContractAddresses();
-      }
-    }, 5000); // Scan every 5 seconds
+    logToPanel('Periodic scanner disabled - scanning only after scrolling stops');
+    
+    // Periodic scanning has been disabled to prevent unwanted CA switching
+    // Now only scanning 300ms after scrolling stops
   }
   
   // Listen for messages from the panel script
