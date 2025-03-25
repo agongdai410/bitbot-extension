@@ -311,12 +311,6 @@ function injectDetectorCode() {
         return;
       }
       
-      // Skip links that are already processed with a successful CA detection
-      // Important: Only skip if this has actually found a CA, not just any processed link
-      if (link.hasAttribute('data-bitbot-found-ca')) {
-        return;
-      }
-      
       // Check if this is in the viewport
       const rect = link.getBoundingClientRect();
       if (rect.top >= window.innerHeight || rect.bottom <= 0) {
@@ -355,6 +349,25 @@ function injectDetectorCode() {
       // Skip links with less than 30 characters
       if (textContent.length < 30) {
         return;
+      }
+      
+      // If the link already has a CA detected (special case for scrolling)
+      // Extract that CA directly rather than re-scanning the link
+      if (link.hasAttribute('data-bitbot-found-ca') && link.hasAttribute('data-address')) {
+        const caAddress = link.getAttribute('data-address');
+        if (caAddress) {
+          visibleCAs.push({
+            address: caAddress,
+            element: link,
+            position: rect.top,
+            visibleHeight: visibleHeight,
+            centerDistance: centerDistance,
+            isLink: true,
+            isAlreadyHighlighted: link.classList.contains('bitbot-ca-link-highlight')
+          });
+          processedCount++;
+          return;
+        }
       }
       
       // Extract both the visible text and the href
@@ -806,17 +819,40 @@ function injectDetectorCode() {
   
   // Helper function to get the most visible CA using default sorting logic
   function getDefaultCA(visibleCAs) {
-    // Sort CAs by visibility score (most visible first) and then by center distance (closest to center first)
+    // Sort CAs by visibility score and position in viewport
     const sortedCAs = [...visibleCAs].sort((a, b) => {
-      // First compare by visible height
+      // Calculate optimal position based on scroll direction
+      // When scrolling down, prefer CAs in the upper half of the viewport
+      // When scrolling up, prefer CAs in the lower half of the viewport
+      const idealPosition = scrollDirection === 'down' ? 
+                          window.innerHeight * 0.3 : // 30% down from the top when scrolling down
+                          window.innerHeight * 0.7;  // 70% down from the top when scrolling up
+      
+      const aRect = a.element.getBoundingClientRect();
+      const bRect = b.element.getBoundingClientRect();
+      
+      // Calculate center of each element
+      const aCenter = (aRect.top + aRect.bottom) / 2;
+      const bCenter = (bRect.top + bRect.bottom) / 2;
+      
+      // Calculate distance from the ideal position
+      const aDistance = Math.abs(aCenter - idealPosition);
+      const bDistance = Math.abs(bCenter - idealPosition);
+      
+      // First, if one is already highlighted and the other isn't, prefer the non-highlighted one
+      if (a.isAlreadyHighlighted && !b.isAlreadyHighlighted) return 1;
+      if (!a.isAlreadyHighlighted && b.isAlreadyHighlighted) return -1;
+      
+      // First compare by visible height (more visible is better)
       if (b.visibleHeight !== a.visibleHeight) {
         return b.visibleHeight - a.visibleHeight;
       }
-      // If tied on visible height, compare by distance from center
-      return a.centerDistance - b.centerDistance;
+      
+      // Then compare by distance from ideal position based on scroll direction
+      return aDistance - bDistance;
     });
     
-    // Return the most visible CA
+    // Return the most optimal CA
     return sortedCAs[0];
   }
   
@@ -902,14 +938,31 @@ function injectDetectorCode() {
         
         // Critical fix: Remove the data-bitbot-found-ca attribute so the link can be re-processed
         link.removeAttribute('data-bitbot-found-ca');
+        link.removeAttribute('data-address');
         
-        // Remove associated buttons
-        const nextSibling = link.nextSibling;
-        if (nextSibling && nextSibling.classList && nextSibling.classList.contains('bitbot-ca-button')) {
-          nextSibling.parentNode.removeChild(nextSibling);
+        // Remove ALL associated buttons - checking multiple siblings
+        let nextNode = link.nextSibling;
+        while (nextNode) {
+          if (nextNode.classList && nextNode.classList.contains('bitbot-ca-button')) {
+            const nodeToRemove = nextNode;
+            nextNode = nextNode.nextSibling; // Move to next before removing
+            nodeToRemove.parentNode.removeChild(nodeToRemove);
+          } else {
+            nextNode = nextNode.nextSibling;
+          }
         }
       } catch (e) {
         logToPanel('Error removing link highlight: ' + e.message);
+      }
+    });
+    
+    // Clean up any orphaned Bitbot buttons that might remain
+    const allButtons = document.querySelectorAll('.bitbot-ca-button');
+    allButtons.forEach(button => {
+      try {
+        button.parentNode.removeChild(button);
+      } catch (e) {
+        logToPanel('Error removing orphaned button: ' + e.message);
       }
     });
   }
@@ -1017,6 +1070,21 @@ function injectDetectorCode() {
   
   // Function to highlight a link element containing a CA
   function highlightLinkWithCA(linkElement, caAddress) {
+    // First, check if this link already has a Bitbot button and remove it
+    // Look for buttons immediately after this link
+    let nextNode = linkElement.nextSibling;
+    while (nextNode) {
+      if (nextNode.classList && nextNode.classList.contains('bitbot-ca-button')) {
+        // Remove existing button
+        nextNode.parentNode.removeChild(nextNode);
+        // Start over since removing changes the DOM
+        nextNode = linkElement.nextSibling;
+      } else {
+        // Move to next sibling
+        nextNode = nextNode.nextSibling;
+      }
+    }
+    
     // Add a special class for styling
     linkElement.classList.add('bitbot-ca-link-highlight');
     
@@ -1087,14 +1155,37 @@ function injectDetectorCode() {
   // Set up scroll event listener
   function setupScrollListener() {
     logToPanel('Setting up scroll listener');
+    let lastScrollDistance = 0;
+    let scrollAccumulator = 0;
+    const SIGNIFICANT_SCROLL = 200; // Pixels of scrolling considered significant
     
     window.addEventListener('scroll', () => {
       isScrolling = true;
       
       // Detect scroll direction
       const currentScrollY = window.scrollY;
+      const scrollDistance = Math.abs(currentScrollY - lastScrollY);
       scrollDirection = currentScrollY < lastScrollY ? 'up' : 'down';
+      
+      // Track total scrolling since last scan
+      scrollAccumulator += scrollDistance;
       lastScrollY = currentScrollY;
+      
+      // If we've scrolled significantly, clear the highlight state
+      // This ensures we can properly reevaluate all visible CAs
+      if (scrollAccumulator > SIGNIFICANT_SCROLL) {
+        // Clear link highlights for links that aren't fully visible
+        document.querySelectorAll('.bitbot-ca-link-highlight').forEach(link => {
+          const rect = link.getBoundingClientRect();
+          if (rect.top > window.innerHeight * 0.8 || rect.bottom < window.innerHeight * 0.2) {
+            // Only remove highlight if it's leaving the main viewing area
+            link.classList.remove('bitbot-ca-link-highlight');
+          }
+        });
+        
+        // Reset scroll accumulator
+        scrollAccumulator = 0;
+      }
       
       // Clear previous timeout
       if (scrollTimeout) {
@@ -1185,6 +1276,12 @@ function injectDetectorCode() {
       // Clear the data-bitbot-found-ca attribute from elements
       document.querySelectorAll('[data-bitbot-found-ca]').forEach(el => {
         el.removeAttribute('data-bitbot-found-ca');
+        el.removeAttribute('data-address');
+      });
+      
+      // Ensure no stray buttons remain
+      document.querySelectorAll('.bitbot-ca-button').forEach(btn => {
+        btn.parentNode.removeChild(btn);
       });
       
       logToPanel('Forced scan triggered, searching for CAs from the top');
