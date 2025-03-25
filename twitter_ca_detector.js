@@ -242,6 +242,9 @@ function injectDetectorCode() {
   let lastScrollY = window.scrollY;
   let scrollDirection = 'down'; // Track scroll direction
   
+  // Track currently highlighted CAs
+  const highlightedCAs = new Map(); // Map of address -> element reference
+  
   // Regular expression to match Solana contract addresses
   const CA_REGEX = /^[1-9A-HJ-NP-Za-km-z]{43,44}$/;
   
@@ -274,11 +277,287 @@ function injectDetectorCode() {
     return matches;
   }
   
+  // Special function to detect CAs in links with partial visibility
+  function scanLinksForPartialCAs() {
+    // Focus on a much broader set of links with potential CAs - don't restrict to t.co
+    const linkElements = document.querySelectorAll('a');
+    const visibleCAs = [];
+    
+    let processedCount = 0;
+
+    linkElements.forEach(link => {
+      // Skip if not visible
+      if (link.offsetParent === null) {
+        return;
+      }
+      
+      // Skip links that are already processed with a successful CA detection
+      // Important: Only skip if this has actually found a CA, not just any processed link
+      if (link.hasAttribute('data-bitbot-found-ca')) {
+        return;
+      }
+      
+      // Get link text but don't apply too many filters - we might miss CAs
+      const textContent = link.textContent;
+
+      // Skip links with less than 30 characters
+      if (textContent.length < 30) {
+        return;
+      }
+      
+      // Check if this is in the viewport
+      const rect = link.getBoundingClientRect();
+      if (rect.top >= window.innerHeight || rect.bottom <= 0) {
+        return; // Not in viewport
+      }
+      
+      // Calculate visibility metrics for later use
+      const visibleTop = Math.max(0, rect.top);
+      const visibleBottom = Math.min(window.innerHeight, rect.bottom);
+      const visibleHeight = Math.max(0, visibleBottom - visibleTop);
+      const elementHeight = rect.height;
+      
+      // Calculate center distance from viewport center (for tiebreaker)
+      const elementCenter = (rect.top + rect.bottom) / 2;
+      const viewportCenter = window.innerHeight / 2;
+      const centerDistance = Math.abs(elementCenter - viewportCenter);
+      
+      // Check if substantially visible
+      const isSubstantiallyVisible = 
+        (visibleHeight >= elementHeight * 0.5) || // At least 50% visible
+        (visibleHeight >= 50); // Or at least 50 pixels visible
+
+      
+      if (!isSubstantiallyVisible) {
+        return;
+      }
+
+      // Skip links with too many child elements - focus on simpler links that may have CAs
+      if (link.children.length > 5) {
+        return;
+      }
+      
+      // Extract both the visible text and the href
+      const visibleText = link.textContent.trim();
+      const href = link.href || '';
+      
+      // Combine all possible sources of the CA
+      let possibleSources = [visibleText, href];
+      
+      // Also extract potential truncated text from span elements
+      const spans = link.querySelectorAll('span');
+      let spanTexts = '';
+      spans.forEach(span => {
+        spanTexts += span.textContent;
+      });
+      
+      if (spanTexts) {
+        possibleSources.push(spanTexts);
+      }
+
+      // Remove non-alphanumeric characters
+      possibleSources = possibleSources.map(source => source.replace(/[^?a-zA-Z0-9 _\-:/\\]/g, ''));
+      
+      // Try to debug what we're finding
+      logToPanel(`Checking link: "${visibleText}" with href: ${href}`);
+      
+      // Try to extract CAs from all possible sources
+      for (const source of possibleSources) {
+        const addresses = extractContractAddresses(source);
+        
+        if (addresses.length > 0) {
+          // Mark as having a found CA
+          link.setAttribute('data-bitbot-found-ca', 'true');
+          processedCount++;
+          
+          addresses.forEach(address => {
+            logToPanel(`Found CA in link: ${address} (from: ${source.substring(0, 30)}...)`);
+            
+            visibleCAs.push({
+              address: address,
+              element: link,
+              position: rect.top,
+              visibleHeight: visibleHeight,
+              centerDistance: centerDistance
+            });
+            
+            // Highlight the link element containing the CA
+            highlightLinkWithCA(link, address);
+          });
+          
+          // Once we found CAs in this link, no need to check other sources
+          break;
+        }
+      }
+      
+      // If no direct CA found, attempt our URL extraction methods
+      if (!link.hasAttribute('data-bitbot-found-ca') && (href.includes('token/') || visibleText.includes('token/'))) {
+        const cleanURL = extractCleanURL(link);
+        const addresses = extractContractAddressesFromURL(cleanURL);
+        
+        if (addresses.length > 0) {
+          // Mark as having a found CA
+          link.setAttribute('data-bitbot-found-ca', 'true');
+          processedCount++;
+          
+          addresses.forEach(address => {
+            logToPanel(`Found CA in link (from URL extraction): ${address}`);
+            
+            visibleCAs.push({
+              address: address,
+              element: link,
+              position: rect.top,
+              visibleHeight: visibleHeight,
+              centerDistance: centerDistance
+            });
+            
+            // Highlight the link element containing the CA
+            highlightLinkWithCA(link, address);
+          });
+        }
+      }
+    });
+    
+    logToPanel(`Special link scanning processed ${linkElements.length} links, found CAs in ${processedCount} links`);
+    
+    // Process any CAs found
+    if (visibleCAs.length > 0) {
+      findMostVisibleCA(visibleCAs);
+    }
+  }
+  
+  // Function to extract a clean URL from a link element by removing HTML tags
+  function extractCleanURL(linkElement) {
+    // Create a temporary container
+    const tempContainer = document.createElement('div');
+    
+    // Clone all child nodes to preserve the original link
+    for (const node of linkElement.childNodes) {
+      tempContainer.appendChild(node.cloneNode(true));
+    }
+    
+    // Get the text content which will strip HTML tags
+    let fullText = tempContainer.textContent;
+    
+    // If that fails, use the original link's text
+    if (!fullText || fullText.trim() === '') {
+      fullText = linkElement.textContent;
+    }
+    
+    // Also check the href attribute which might contain the full URL
+    const href = linkElement.href || '';
+    
+    // If the text content is truncated (ends with '…') and href is available, prefer the href
+    if (fullText.includes('…') && href) {
+      try {
+        // Try to decode the URL if it's encoded
+        const decodedHref = decodeURIComponent(href);
+        return decodedHref;
+      } catch (e) {
+        // If decoding fails, return the original href
+        return href;
+      }
+    }
+    
+    return fullText;
+  }
+  
+  // Function to extract potential contract addresses from a URL
+  function extractContractAddressesFromURL(url) {
+    // First try direct extraction with the existing function
+    const directMatches = extractContractAddresses(url);
+    if (directMatches.length > 0) {
+      return directMatches;
+    }
+    
+    // Try to handle common URL patterns where the CA is a path segment
+    if (url.includes('/token/') || url.includes('/coin/')) {
+      // Extract the segment after /token/ or /coin/
+      const tokenMatch = url.match(/\/(token|coin)\/([^\/\?&#]+)/i);
+      if (tokenMatch && tokenMatch[2]) {
+        const tokenPart = tokenMatch[2];
+        
+        // Check if this token part contains an underscore (common in referral links)
+        if (tokenPart.includes('_')) {
+          // The CA is typically after the last underscore
+          const parts = tokenPart.split('_');
+          const lastPart = parts[parts.length - 1];
+          
+          // Check if the last part is a valid CA
+          if (CA_REGEX.test(lastPart)) {
+            return [lastPart];
+          }
+          
+          // If not, check if the full token part is a valid CA
+          if (CA_REGEX.test(tokenPart)) {
+            return [tokenPart];
+          }
+        } else if (CA_REGEX.test(tokenPart)) {
+          // If no underscore, just check if the token part is a CA
+          return [tokenPart];
+        }
+      }
+    }
+    
+    // If no direct matches, try to extract segments that might be parts of a CA
+    // Look for paths in the URL that might contain the CA
+    const urlParts = url.split(/[\/\?&=#]+/);
+    
+    // First check for complete matches
+    for (const part of urlParts) {
+      // Skip short parts or obvious non-CA segments
+      if (part.length < 20 || part.includes('.') || part.includes(':')) {
+        continue;
+      }
+      
+      // Check if this part matches a CA pattern
+      if (CA_REGEX.test(part)) {
+        return [part];
+      }
+    }
+    
+    // If no complete CA found, look for concatenated parts that might form a CA
+    // This happens when Twitter splits URLs with spans
+    if (urlParts.length >= 2) {
+      // Try to combine adjacent parts
+      for (let i = 0; i < urlParts.length - 1; i++) {
+        const part1 = urlParts[i];
+        const part2 = urlParts[i + 1];
+        
+        // Only consider parts that don't have obvious URL components
+        if (part1.includes('.') || part2.includes('.')) {
+          continue;
+        }
+        
+        // Try to combine the parts and check if it's a CA
+        const combined = part1 + part2;
+        if (CA_REGEX.test(combined)) {
+          return [combined];
+        }
+        
+        // Also try substrings of the combined string
+        if (combined.length >= 43) {
+          for (let start = 0; start <= combined.length - 43; start++) {
+            const candidate = combined.substring(start, start + 44);
+            if (CA_REGEX.test(candidate)) {
+              return [candidate];
+            }
+          }
+        }
+      }
+    }
+    
+    return [];
+  }
+  
   // Function to scan the visible page content for contract addresses
   function scanForContractAddresses() {
     logToPanel('Scanning page for contract addresses...');
     
-    // First get all text-containing elements
+    // First handle special case: links that contain partial CAs
+    scanLinksForPartialCAs();
+    
+    // Get all text-containing elements
     const allTextElements = document.querySelectorAll('div, span, p, a, h1, h2, h3, h4, h5, h6');
     logToPanel(`Found ${allTextElements.length} total text elements`);
     
@@ -288,6 +567,11 @@ function injectDetectorCode() {
     const leafElements = Array.from(allTextElements).filter(el => {
       // Skip invisible elements early
       if (el.offsetParent === null) {
+        return false;
+      }
+      
+      // Skip elements where we already found a CA (not just processed elements)
+      if (el.hasAttribute('data-bitbot-found-ca')) {
         return false;
       }
       
@@ -477,6 +761,7 @@ function injectDetectorCode() {
   
   // Helper function to remove all highlight spans
   function removeAllHighlights() {
+    // Regular text highlights
     const highlightedSpans = document.querySelectorAll('.bitbot-ca-highlight');
     highlightedSpans.forEach(span => {
       try {
@@ -493,6 +778,29 @@ function injectDetectorCode() {
         }
       } catch (e) {
         logToPanel('Error removing highlight: ' + e.message);
+      }
+    });
+    
+    // Link highlights
+    const highlightedLinks = document.querySelectorAll('.bitbot-ca-link-highlight');
+    highlightedLinks.forEach(link => {
+      try {
+        // Remove styling
+        link.style.border = '';
+        link.style.borderRadius = '';
+        link.style.padding = '';
+        link.style.margin = '';
+        link.style.display = '';
+        link.style.alignItems = '';
+        link.classList.remove('bitbot-ca-link-highlight');
+        
+        // Remove associated buttons
+        const nextSibling = link.nextSibling;
+        if (nextSibling && nextSibling.classList && nextSibling.classList.contains('bitbot-ca-button')) {
+          nextSibling.parentNode.removeChild(nextSibling);
+        }
+      } catch (e) {
+        logToPanel('Error removing link highlight: ' + e.message);
       }
     });
   }
@@ -529,6 +837,7 @@ function injectDetectorCode() {
     const highlightSpan = document.createElement('span');
     highlightSpan.className = 'bitbot-ca-highlight';
     highlightSpan.textContent = caAddress;
+    highlightSpan.setAttribute('data-address', caAddress); // Add address as data attribute for later lookup
     highlightSpan.style.cssText = 'border: 2px solid orange; border-radius: 4px; padding: 1px 2px; margin: 0 2px; display: inline-flex; align-items: center;';
     
     // Create Bitbot button
@@ -595,6 +904,75 @@ function injectDetectorCode() {
     parent.insertBefore(beforeNode, highlightSpan);
     
     logToPanel('Successfully highlighted CA text with Bitbot button');
+  }
+  
+  // Function to highlight a link element containing a CA
+  function highlightLinkWithCA(linkElement, caAddress) {
+    // Add a special class for styling
+    linkElement.classList.add('bitbot-ca-link-highlight');
+    
+    // Store the original address for reference
+    linkElement.setAttribute('data-address', caAddress);
+    
+    // Set styling similar to text CA highlights
+    linkElement.style.cssText = 'border: 2px solid orange; border-radius: 4px; padding: 1px 2px; margin: 0 2px; display: inline-flex; align-items: center;';
+    
+    // Create Bitbot button to appear after the link
+    const button = document.createElement('button');
+    button.className = 'bitbot-ca-button';
+    button.style.cssText = 'background: linear-gradient(45deg, #ff8c00, #ff6347); color: white; border: none; border-radius: 4px; margin-left: 4px; padding: 1px 4px; font-size: 10px; cursor: pointer; display: inline-flex; align-items: center;';
+    
+    // Create icon for button
+    let iconElement;
+    
+    try {
+      // Try to create image element with SVG icon
+      const icon = document.createElement('img');
+      icon.src = BITBOT_ICON_URL;
+      icon.alt = 'Bitbot';
+      icon.style.cssText = 'height: 12px; width: 12px; margin-right: 2px;';
+      icon.onerror = () => {
+        // If icon fails to load, replace with a simple circle
+        const fallbackIcon = document.createElement('span');
+        fallbackIcon.style.cssText = 'display: inline-block; width: 8px; height: 8px; background-color: white; border-radius: 50%; margin-right: 3px;';
+        button.replaceChild(fallbackIcon, icon);
+      };
+      iconElement = icon;
+    } catch (e) {
+      // Fallback to a simple circle if the icon creation fails
+      const fallbackIcon = document.createElement('span');
+      fallbackIcon.style.cssText = 'display: inline-block; width: 8px; height: 8px; background-color: white; border-radius: 50%; margin-right: 3px;';
+      iconElement = fallbackIcon;
+    }
+    
+    // Add text to button
+    const buttonText = document.createTextNode('Bitbot');
+    
+    // Assemble button
+    button.appendChild(iconElement);
+    button.appendChild(buttonText);
+    
+    // Add event handler to button
+    button.addEventListener('click', (e) => {
+      e.preventDefault();
+      e.stopPropagation();
+      
+      // Trigger the same action as when the CA is detected
+      chrome.runtime.sendMessage({
+        action: 'caDetected',
+        contractAddress: caAddress,
+        url: window.location.href
+      });
+    });
+    
+    // Insert the button after the link
+    if (linkElement.nextSibling) {
+      linkElement.parentNode.insertBefore(button, linkElement.nextSibling);
+    } else {
+      linkElement.parentNode.appendChild(button);
+    }
+    
+    logToPanel('Successfully highlighted link element with Bitbot button');
   }
   
   // Set up scroll event listener
@@ -713,6 +1091,12 @@ function injectDetectorCode() {
       
       // Reset lastProcessedCA to ensure we find the topmost CA again
       lastProcessedCA = null;
+      
+      // Clear the data-bitbot-found-ca attribute from elements
+      document.querySelectorAll('[data-bitbot-found-ca]').forEach(el => {
+        el.removeAttribute('data-bitbot-found-ca');
+      });
+      
       logToPanel('Forced scan triggered, searching for CAs from the top');
       scanForContractAddresses();
       sendResponse({ scanning: true });
