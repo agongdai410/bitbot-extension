@@ -265,8 +265,24 @@ function injectDetectorCode() {
     // Split text into words and filter for potential CAs
     const words = text.split(/[\s\n\r\t,.;:'"!?()[\]{}\/\\<>]+/);
     for (const word of words) {
+      // Check for direct CA matches
       if (CA_REGEX.test(word)) {
         matches.push(word);
+        continue;
+      }
+      
+      // Check for referral code prefixes (6-10 alphanumeric chars + underscore + CA)
+      if (word.includes('_')) {
+        const referralPattern = /^[a-zA-Z0-9]{6,10}_([1-9A-HJ-NP-Za-km-z]{43,44})$/;
+        const referralMatch = word.match(referralPattern);
+        
+        if (referralMatch && referralMatch[1]) {
+          const potentialCA = referralMatch[1];
+          if (CA_REGEX.test(potentialCA)) {
+            logToPanel(`Found CA with referral prefix in text: ${potentialCA}`);
+            matches.push(potentialCA);
+          }
+        }
       }
     }
     
@@ -479,7 +495,19 @@ function injectDetectorCode() {
         
         // Check if this token part contains an underscore (common in referral links)
         if (tokenPart.includes('_')) {
-          // The CA is typically after the last underscore
+          // Check for referral code pattern: 6-10 alphanumeric chars followed by underscore
+          const referralPattern = /^[a-zA-Z0-9]{6,10}_(.+)$/;
+          const referralMatch = tokenPart.match(referralPattern);
+          
+          if (referralMatch && referralMatch[1]) {
+            const potentialCA = referralMatch[1];
+            if (CA_REGEX.test(potentialCA)) {
+              logToPanel(`Found CA with referral prefix: ${potentialCA}`);
+              return [potentialCA];
+            }
+          }
+          
+          // If not a standard referral pattern, try the last part after underscore
           const parts = tokenPart.split('_');
           const lastPart = parts[parts.length - 1];
           
