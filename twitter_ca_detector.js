@@ -242,6 +242,10 @@ function injectDetectorCode() {
   let lastScrollY = window.scrollY;
   let scrollDirection = 'down'; // Track scroll direction
   
+  // Add cooldown mechanism to prevent rapid CA switching
+  let lastCASelectionTime = 0;
+  const CA_SELECTION_COOLDOWN = 100; // ms to wait before selecting a new CA
+  
   // Track currently highlighted CAs
   const highlightedCAs = new Map(); // Map of address -> element reference
   
@@ -597,6 +601,13 @@ function injectDetectorCode() {
   
   // Function to scan the visible page content for contract addresses
   function scanForContractAddresses() {
+    // Check if we're in the cooldown period after selecting a CA
+    const now = Date.now();
+    if (now - lastCASelectionTime < CA_SELECTION_COOLDOWN) {
+      logToPanel(`Skipping CA scan - in cooldown period (${now - lastCASelectionTime}ms < ${CA_SELECTION_COOLDOWN}ms)`);
+      return;
+    }
+    
     logToPanel('Scanning page for contract addresses...');
     
     // First handle special case: links that contain partial CAs
@@ -865,7 +876,7 @@ function injectDetectorCode() {
     // Check if this is different from the last processed CA
     const isSameAsLastCA = lastProcessedCA && 
                          lastProcessedCA.address === ca.address &&
-                         Math.abs(lastProcessedCA.position - ca.position) < 10;
+                         Math.abs(lastProcessedCA.position - ca.position) < 20;
     
     if (!isSameAsLastCA) {
       logToPanel(`Showing new CA: ${ca.address}`);
@@ -878,6 +889,9 @@ function injectDetectorCode() {
       
       // Update the last processed CA
       lastProcessedCA = ca;
+      
+      // Record the time when this CA was selected (for cooldown)
+      lastCASelectionTime = Date.now();
       
       // Highlight based on whether this is a link or text CA
       if (ca.isLink) {
@@ -1196,7 +1210,18 @@ function injectDetectorCode() {
       scrollTimeout = setTimeout(() => {
         isScrolling = false;
         logToPanel(`Scrolling has stopped (direction: ${scrollDirection}), scanning for CAs after 300ms delay...`);
-        scanForContractAddresses();
+        
+        // Check if we're in cooldown period before scheduling the scan
+        const cooldownRemaining = CA_SELECTION_COOLDOWN - (Date.now() - lastCASelectionTime);
+        if (cooldownRemaining > 0) {
+          logToPanel(`In CA selection cooldown, waiting ${cooldownRemaining}ms before scanning`);
+          // Schedule scan after cooldown expires
+          setTimeout(() => {
+            scanForContractAddresses();
+          }, cooldownRemaining);
+        } else {
+          scanForContractAddresses();
+        }
       }, 300);
     });
     
@@ -1204,7 +1229,18 @@ function injectDetectorCode() {
     document.addEventListener('click', () => {
       setTimeout(() => {
         logToPanel('Click detected, scanning for new CAs...');
-        scanForContractAddresses();
+        
+        // Check if we're in cooldown period before initiating a scan
+        const cooldownRemaining = CA_SELECTION_COOLDOWN - (Date.now() - lastCASelectionTime);
+        if (cooldownRemaining > 0) {
+          logToPanel(`In CA selection cooldown, waiting ${cooldownRemaining}ms before scanning`);
+          // Schedule scan after cooldown expires
+          setTimeout(() => {
+            scanForContractAddresses();
+          }, cooldownRemaining);
+        } else {
+          scanForContractAddresses();
+        }
       }, 500);
     });
   }
@@ -1236,7 +1272,18 @@ function injectDetectorCode() {
         // Wait a bit for the DOM to settle after changes
         setTimeout(() => {
           logToPanel('DOM changed, scanning for new CAs...');
-          scanForContractAddresses();
+          
+          // Check if we're in cooldown period before initiating a scan
+          const cooldownRemaining = CA_SELECTION_COOLDOWN - (Date.now() - lastCASelectionTime);
+          if (cooldownRemaining > 0) {
+            logToPanel(`In CA selection cooldown, waiting ${cooldownRemaining}ms before scanning`);
+            // Schedule scan after cooldown expires
+            setTimeout(() => {
+              scanForContractAddresses();
+            }, cooldownRemaining);
+          } else {
+            scanForContractAddresses();
+          }
         }, 500);
       }
     });
@@ -1264,6 +1311,29 @@ function injectDetectorCode() {
       sendResponse({ scanning: true });
     }
     else if (message.action === 'forceScan') {
+      // Check for override flag in the message
+      const override = message.override === true;
+      
+      // Check cooldown unless override is specified
+      if (!override) {
+        const cooldownRemaining = CA_SELECTION_COOLDOWN - (Date.now() - lastCASelectionTime);
+        if (cooldownRemaining > 0) {
+          logToPanel(`In CA selection cooldown, delaying force scan by ${cooldownRemaining}ms`);
+          setTimeout(() => {
+            executeForceScan();
+          }, cooldownRemaining);
+          sendResponse({ delayed: true, cooldown: cooldownRemaining });
+          return true;
+        }
+      }
+      
+      // Execute force scan immediately
+      executeForceScan();
+      sendResponse({ scanning: true });
+    }
+    
+    // Helper function to execute a force scan
+    function executeForceScan() {
       // Remove any previous CA highlights
       removeAllHighlights();
       
@@ -1286,7 +1356,6 @@ function injectDetectorCode() {
       
       logToPanel('Forced scan triggered, searching for CAs from the top');
       scanForContractAddresses();
-      sendResponse({ scanning: true });
     }
     
     // Return true for async responses
