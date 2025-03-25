@@ -240,6 +240,7 @@ function injectDetectorCode() {
   let scrollTimeout = null;
   const SCROLL_DELAY = 300; // ms to wait after scrolling stops
   let lastScrollY = window.scrollY;
+  let scrollDirection = 'down'; // Track scroll direction
   
   // Regular expression to match Solana contract addresses
   const CA_REGEX = /^[1-9A-HJ-NP-Za-km-z]{43,44}$/;
@@ -385,8 +386,44 @@ function injectDetectorCode() {
       return;
     }
     
+    // Special handling for scrolling up - prioritize CAs that appear at the top of the viewport
+    let caToProcess;
+    
+    if (scrollDirection === 'up' && confirmedVisibleCAs.length > 0) {
+      // When scrolling up, prioritize CAs that are newly visible near the top of the screen
+      // Sort by position from top (smaller top value means higher in the viewport)
+      const topCAs = [...confirmedVisibleCAs].sort((a, b) => a.position - b.position);
+      
+      // Find a CA that's near the top and likely newly visible
+      for (const ca of topCAs) {
+        const rect = ca.element.getBoundingClientRect();
+        // Consider it newly visible if it's in the top 1/3 of the viewport
+        if (rect.top >= 0 && rect.top < window.innerHeight / 3) {
+          // If this CA is different from the last processed one, use it
+          if (!lastProcessedCA || ca.address !== lastProcessedCA.address) {
+            logToPanel(`Found newly visible CA at top while scrolling up: ${ca.address}`);
+            caToProcess = ca;
+            break;
+          }
+        }
+      }
+      
+      // If no suitable CA found for scrolling up, fall back to most visible one
+      if (!caToProcess) {
+        caToProcess = getDefaultCA(confirmedVisibleCAs);
+      }
+    } else {
+      // For scrolling down or when direction isn't relevant, use standard logic
+      caToProcess = getDefaultCA(confirmedVisibleCAs);
+    }
+    
+    processSelectedCA(caToProcess);
+  }
+  
+  // Helper function to get the most visible CA using default sorting logic
+  function getDefaultCA(visibleCAs) {
     // Sort CAs by visibility score (most visible first) and then by center distance (closest to center first)
-    confirmedVisibleCAs.sort((a, b) => {
+    const sortedCAs = [...visibleCAs].sort((a, b) => {
       // First compare by visible height
       if (b.visibleHeight !== a.visibleHeight) {
         return b.visibleHeight - a.visibleHeight;
@@ -395,51 +432,69 @@ function injectDetectorCode() {
       return a.centerDistance - b.centerDistance;
     });
     
-    // Get the most visible CA
-    const mostVisibleCA = confirmedVisibleCAs[0];
-    logToPanel(`Most visible CA: ${mostVisibleCA.address} (height: ${mostVisibleCA.visibleHeight}, center distance: ${mostVisibleCA.centerDistance.toFixed(2)})`);
+    // Return the most visible CA
+    return sortedCAs[0];
+  }
+  
+  // Helper function to process the selected CA
+  function processSelectedCA(ca) {
+    logToPanel(`Processing CA: ${ca.address} (height: ${ca.visibleHeight}, center distance: ${ca.centerDistance.toFixed(2)})`);
     
     // Check if this is different from the last processed CA
     const isSameAsLastCA = lastProcessedCA && 
-                          lastProcessedCA.address === mostVisibleCA.address &&
-                          Math.abs(lastProcessedCA.position - mostVisibleCA.position) < 10;
+                         lastProcessedCA.address === ca.address &&
+                         Math.abs(lastProcessedCA.position - ca.position) < 10;
     
     if (!isSameAsLastCA) {
-      logToPanel(`Showing new most visible CA: ${mostVisibleCA.address}`);
+      logToPanel(`Showing new CA: ${ca.address}`);
       
       // Remove previous highlight if it exists
       if (lastProcessedCA) {
         // Look for any previously highlighted spans and remove them
-        const highlightedSpans = document.querySelectorAll('.bitbot-ca-highlight');
-        highlightedSpans.forEach(span => {
-          // Unwrap the span (replace with its text content)
-          const parent = span.parentNode;
-          if (parent) {
-            const textNode = document.createTextNode(span.textContent);
-            parent.replaceChild(textNode, span);
-          }
-        });
+        removeAllHighlights();
       }
       
       // Update the last processed CA
-      lastProcessedCA = mostVisibleCA;
+      lastProcessedCA = ca;
       
       // Highlight the specific CA text within the element
-      highlightCAText(mostVisibleCA.element, mostVisibleCA.address);
+      highlightCAText(ca.element, ca.address);
       
       // Send message to the extension
       try {
         chrome.runtime.sendMessage({
           action: 'caDetected',
-          contractAddress: mostVisibleCA.address,
+          contractAddress: ca.address,
           url: window.location.href
         });
       } catch (error) {
         logToPanel('Failed to send message to extension: ' + error);
       }
     } else {
-      logToPanel('Most visible CA is the same as the last processed one, not sending again');
+      logToPanel('CA is the same as the last processed one, not sending again');
     }
+  }
+  
+  // Helper function to remove all highlight spans
+  function removeAllHighlights() {
+    const highlightedSpans = document.querySelectorAll('.bitbot-ca-highlight');
+    highlightedSpans.forEach(span => {
+      try {
+        // Get the original CA text (without the button)
+        const caAddress = span.getAttribute('data-address');
+        
+        // Create a new text node with just the CA address
+        const textNode = document.createTextNode(caAddress || span.firstChild.textContent);
+        
+        // Replace the span with the text node
+        const parent = span.parentNode;
+        if (parent) {
+          parent.replaceChild(textNode, span);
+        }
+      } catch (e) {
+        logToPanel('Error removing highlight: ' + e.message);
+      }
+    });
   }
   
   // Function to highlight the specific CA text within an element
@@ -552,6 +607,11 @@ function injectDetectorCode() {
       isScrolling = true;
       scrollStoppedDuration = 0; // Reset the duration whenever scrolling happens
       
+      // Detect scroll direction
+      const currentScrollY = window.scrollY;
+      scrollDirection = currentScrollY < lastScrollY ? 'up' : 'down';
+      lastScrollY = currentScrollY;
+      
       // Clear previous timeout
       if (scrollTimeout) {
         clearTimeout(scrollTimeout);
@@ -570,7 +630,7 @@ function injectDetectorCode() {
             // Only proceed if we've been stopped for the settle time
             if (timeSinceScrollStopped >= SCROLL_SETTLE_TIME) {
               isScrolling = false;
-              logToPanel('Scrolling has fully stopped, scanning for CAs...');
+              logToPanel(`Scrolling has fully stopped (direction: ${scrollDirection}), scanning for CAs...`);
               scanForContractAddresses();
             }
           }, SCROLL_SETTLE_TIME);
@@ -646,15 +706,10 @@ function injectDetectorCode() {
     }
     else if (message.action === 'forceScan') {
       // Remove any previous CA highlights
-      const highlightedSpans = document.querySelectorAll('.bitbot-ca-highlight');
-      highlightedSpans.forEach(span => {
-        // Unwrap the span (replace with its text content)
-        const parent = span.parentNode;
-        if (parent) {
-          const textNode = document.createTextNode(span.textContent.replace(/Bitbot$/, ''));
-          parent.replaceChild(textNode, span);
-        }
-      });
+      removeAllHighlights();
+      
+      // Clear the tracked highlights
+      highlightedCAs.clear();
       
       // Reset lastProcessedCA to ensure we find the topmost CA again
       lastProcessedCA = null;
