@@ -296,7 +296,7 @@ function injectDetectorCode() {
   // Special function to detect CAs in links with partial visibility
   function scanLinksForPartialCAs() {
     // Focus on a much broader set of links with potential CAs - don't restrict to t.co
-    const linkElements = document.querySelectorAll('a');
+    const linkElements = document.querySelectorAll('main a');
     const visibleCAs = [];
     
     let processedCount = 0;
@@ -306,18 +306,14 @@ function injectDetectorCode() {
       if (link.offsetParent === null) {
         return;
       }
+
+      if (!link.href.startsWith('https://t.co/')) {
+        return;
+      }
       
       // Skip links that are already processed with a successful CA detection
       // Important: Only skip if this has actually found a CA, not just any processed link
       if (link.hasAttribute('data-bitbot-found-ca')) {
-        return;
-      }
-      
-      // Get link text but don't apply too many filters - we might miss CAs
-      const textContent = link.textContent;
-
-      // Skip links with less than 30 characters
-      if (textContent.length < 30) {
         return;
       }
       
@@ -350,6 +346,14 @@ function injectDetectorCode() {
 
       // Skip links with too many child elements - focus on simpler links that may have CAs
       if (link.children.length > 5) {
+        return;
+      }
+      
+      // Get link text but don't apply too many filters - we might miss CAs
+      const textContent = link.textContent;
+
+      // Skip links with less than 30 characters
+      if (textContent.length < 30) {
         return;
       }
       
@@ -585,14 +589,68 @@ function injectDetectorCode() {
     // First handle special case: links that contain partial CAs
     scanLinksForPartialCAs();
     
-    // Get all text-containing elements
-    const allTextElements = document.querySelectorAll('div, span, p, a, h1, h2, h3, h4, h5, h6');
-    logToPanel(`Found ${allTextElements.length} total text elements`);
+    // Get the main element - focus our search on the main content area
+    const mainElement = document.querySelector('main');
+    if (!mainElement) {
+      logToPanel('No main element found, skipping text scan');
+      return;
+    }
     
-    // Filter to focus on leaf-like nodes - elements that either:
-    // 1. Have no children with text content
-    // 2. Have minimal nesting and contain contract addresses themselves
-    const leafElements = Array.from(allTextElements).filter(el => {
+    // More targeted approach - first look for direct text nodes with numbers
+    // Use a TreeWalker for better performance when scanning large DOMs
+    let potentialElements = [];
+    const treeWalker = document.createTreeWalker(
+      mainElement,
+      NodeFilter.SHOW_TEXT,
+      {
+        acceptNode: function(node) {
+          // Skip very short text, empty text, or text without numbers
+          if (!node.textContent || 
+              node.textContent.trim().length < 30 || 
+              !node.textContent.match(/[0-9]/)) {
+            return NodeFilter.FILTER_REJECT;
+          }
+          
+          // Skip if parent is already processed
+          if (node.parentElement && node.parentElement.hasAttribute('data-bitbot-found-ca')) {
+            return NodeFilter.FILTER_REJECT;
+          }
+          
+          // Skip hidden elements
+          if (node.parentElement && node.parentElement.offsetParent === null) {
+            return NodeFilter.FILTER_REJECT;
+          }
+          
+          return NodeFilter.FILTER_ACCEPT;
+        }
+      }
+    );
+    
+    // Collect potential text nodes
+    let currentNode;
+    let nodeCount = 0;
+    let maxNodes = 300; // Limit the number of nodes to process in one scan
+    
+    while ((currentNode = treeWalker.nextNode()) && nodeCount < maxNodes) {
+      // Add the parent element of this text node to our list of elements to check
+      if (currentNode.parentElement && !potentialElements.includes(currentNode.parentElement)) {
+        potentialElements.push(currentNode.parentElement);
+        nodeCount++;
+      }
+    }
+    
+    // Special case: also check t.co links which often contain CAs
+    const tcoLinks = mainElement.querySelectorAll('a[href^="https://t.co/"]');
+    tcoLinks.forEach(link => {
+      if (!link.hasAttribute('data-bitbot-found-ca') && link.offsetParent !== null) {
+        potentialElements.push(link);
+      }
+    });
+    
+    logToPanel(`Found ${potentialElements.length} potential text elements to scan`);
+    
+    // Now filter for elements with potential CAs
+    const leafElements = potentialElements.filter(el => {
       // Skip invisible elements early
       if (el.offsetParent === null) {
         return false;
@@ -869,7 +927,7 @@ function injectDetectorCode() {
     highlightSpan.className = 'bitbot-ca-highlight';
     highlightSpan.textContent = caAddress;
     highlightSpan.setAttribute('data-address', caAddress); // Add address as data attribute for later lookup
-    highlightSpan.style.cssText = 'border: 2px solid orange; border-radius: 4px; padding: 1px 2px; margin: 0 2px; display: inline-flex; align-items: center;';
+    highlightSpan.style.cssText = 'display: inline-flex; align-items: center;';
     
     // Create Bitbot button
     const button = document.createElement('button');
@@ -946,7 +1004,7 @@ function injectDetectorCode() {
     linkElement.setAttribute('data-address', caAddress);
     
     // Set styling similar to text CA highlights
-    linkElement.style.cssText = 'border: 2px solid orange; border-radius: 4px; padding: 1px 2px; margin: 0 2px; display: inline-flex; align-items: center;';
+    linkElement.style.cssText = 'display: inline-flex; align-items: center;';
     
     // Create Bitbot button to appear after the link
     const button = document.createElement('button');
