@@ -794,6 +794,9 @@ function injectDetectorCode() {
         link.style.alignItems = '';
         link.classList.remove('bitbot-ca-link-highlight');
         
+        // Critical fix: Remove the data-bitbot-found-ca attribute so the link can be re-processed
+        link.removeAttribute('data-bitbot-found-ca');
+        
         // Remove associated buttons
         const nextSibling = link.nextSibling;
         if (nextSibling && nextSibling.classList && nextSibling.classList.contains('bitbot-ca-button')) {
