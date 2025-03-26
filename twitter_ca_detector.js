@@ -187,43 +187,39 @@ async function checkAndInjectScript(tabId) {
   }
 }
 
-// Initialize by checking the current active tab
-async function initialize() {
+async function enforceScanWhenTabUpdated() {
   try {
     const tabs = await chrome.tabs.query({ active: true, currentWindow: true });
     if (tabs && tabs.length > 0) {
       activeTabId = tabs[0].id;
       await checkAndInjectScript(activeTabId);
       
-      // Force a scan when the side panel is opened (panel.js is loaded)
+      // Force a scan when visibility changes
       if (detector && detector.detectorsInjected) {
-        console.log('Panel opened, triggering initial scan...');
         setTimeout(() => {
           chrome.tabs.sendMessage(activeTabId, { action: 'forceScan' });
-        }, 1500);
+        }, 500);
       }
     }
   } catch (error) {
-    console.error('Error during initialization:', error);
+    console.error('Error enforcing scan when tab updated:', error);
   }
+}
+
+// Initialize by checking the current active tab
+async function initialize() {
+  await enforceScanWhenTabUpdated();
   
   // Listen for document visibility changes (side panel opened)
   document.addEventListener('visibilitychange', async () => {
     if (!document.hidden) {
       console.log('Side panel became visible, refreshing detector...');
-      const tabs = await chrome.tabs.query({ active: true, currentWindow: true });
-      if (tabs && tabs.length > 0) {
-        activeTabId = tabs[0].id;
-        await checkAndInjectScript(activeTabId);
-        
-        // Force a scan when visibility changes
-        if (detector && detector.detectorsInjected) {
-          setTimeout(() => {
-            chrome.tabs.sendMessage(activeTabId, { action: 'forceScan' });
-          }, 500);
-        }
-      }
+      await enforceScanWhenTabUpdated();
     }
+  });
+
+  chrome.tabs.onActivated.addListener(() => {
+    enforceScanWhenTabUpdated();
   });
 }
 

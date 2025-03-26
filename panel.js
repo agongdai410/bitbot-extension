@@ -29,10 +29,6 @@ document.addEventListener('DOMContentLoaded', () => {
   // Max history size
   const MAX_HISTORY_SIZE = 100;
   
-  // Track the last token we've detected to avoid redundant searches
-  let lastCaDetectedOnX = null;
-  let lastCaOnGmgnUrl = null;
-  
   // Function to load history from localStorage
   function loadHistoryFromLocalStorage(iframeId) {
     try {
@@ -170,18 +166,6 @@ document.addEventListener('DOMContentLoaded', () => {
     
     // Only allow navigation if we're not at the beginning of this iframe's history
     if (history.current > 0) {
-      // Check current URL before navigation
-      const currentUrl = history.urls[history.current];
-      const previousUrl = history.urls[history.current - 1];
-      
-      // If navigating away from a token search on X, reset the token tracker
-      if (currentActiveIframe === 'x' && 
-          currentUrl && currentUrl.includes('search?q=') &&
-          (!previousUrl || !previousUrl.includes('search?q='))) {
-        console.log('Navigating away from token search, resetting lastCaDetectedOnX');
-        lastCaDetectedOnX = null;
-      }
-      
       history.current--;
       const url = history.urls[history.current];
       await loadIframe(iframe, url, `Loading previous page`, currentActiveIframe);
@@ -201,18 +185,6 @@ document.addEventListener('DOMContentLoaded', () => {
     
     // Only allow navigation if we're not at the end of this iframe's history
     if (history.current < history.urls.length - 1) {
-      // Check current URL before navigation
-      const currentUrl = history.urls[history.current];
-      const nextUrl = history.urls[history.current + 1];
-      
-      // If navigating away from a token search on X, reset the token tracker
-      if (currentActiveIframe === 'x' && 
-          currentUrl && currentUrl.includes('search?q=') &&
-          (!nextUrl || !nextUrl.includes('search?q='))) {
-        console.log('Navigating away from token search, resetting lastCaDetectedOnX');
-        lastCaDetectedOnX = null;
-      }
-      
       history.current++;
       const url = history.urls[history.current];
       await loadIframe(iframe, url, `Loading next page`, currentActiveIframe);
@@ -404,13 +376,6 @@ document.addEventListener('DOMContentLoaded', () => {
       // Apply appropriate handler based on loaded URL
       if (url.includes('x.com')) {
         showNotification('Showing X.com', false);
-        
-        // If we're navigating to a non-search page in X.com, reset the lastCaDetectedOnX
-        // so we can detect the same token again if needed
-        if (!url.includes('search?q=')) {
-          console.log('Resetting lastCaDetectedOnX due to navigation to non-search X.com page');
-          lastCaDetectedOnX = null;
-        }
       } else if (url.includes('gmgn.ai')) {
         showNotification('Showing pmgn.ai', false);
         // Try to bypass Cloudflare
@@ -420,8 +385,7 @@ document.addEventListener('DOMContentLoaded', () => {
       // For gmgn.ai token pages, check if it's a new token
       if (iframeId === 'gmgn' && url.includes('/token/')) {
         const token = extractContractAddress(url);
-        if (token && token !== lastCaOnGmgnUrl) {
-          lastCaOnGmgnUrl = token;
+        if (token) {
           // Check if it's a token page
           checkForTokenPage(url, iframeId);
         }
@@ -439,6 +403,10 @@ document.addEventListener('DOMContentLoaded', () => {
         error.message.includes('timeout') || 
         error.message.includes('connection') ||
         error.message.includes('network');
+
+      if (isConnectionError) {
+        showFailedToLoadNotification(true);
+      }
       
       if (attempt < MAX_RETRIES) {
         // Retry with backoff
@@ -734,21 +702,17 @@ document.addEventListener('DOMContentLoaded', () => {
       bypassCloudflare(targetIframe);
     }
     else if (event.data.type === 'TOKEN_DETECTED') {
-      console.log('Token detected in main browser:', event.data.tokenAddress);
+      console.log('Token detected in main browser:', event.data.gmgnUrl);
+      const tokenAddress = extractContractAddress(event.data.gmgnUrl);
       
       // Save gmgn URL to history even if not currently viewing that iframe
       addToHistory(event.data.gmgnUrl, 'gmgn');
       
-      // Check if the token is different from last detected
-      if (event.data.tokenAddress !== lastCaOnGmgnUrl) {
-        lastCaOnGmgnUrl = event.data.tokenAddress;
-        
-        // Search for this token on X
-        searchTokenOnX(event.data.tokenAddress);
-        
-        // Show notification
-        showNotification(`Searching for ${event.data.tokenAddress.slice(0, 8)}... on X`, false);
-      }
+      // Search for this token on X
+      searchTokenOnX(tokenAddress);
+      
+      // Show notification
+      showNotification(`Searching for ${event.data.tokenAddress.slice(0, 8)}... on X`, false);
     }
     else if (event.data.type === 'CA_DETECTED') {
       console.log('Contract address detected on X.com:', event.data.contractAddress);
@@ -763,9 +727,8 @@ document.addEventListener('DOMContentLoaded', () => {
       const isShowingThisCA = newCa ? currentGmgnUrl.includes(newCa) : !currentGmgnUrl.includes('/token/');
       
       // If the CA is not the same as the currently displayed one, or if it's not a gmgn.ai page, switch to the new CA
-      if (!isShowingThisCA || !currentGmgnUrl.includes('gmgn.ai')) {
+      if (!isShowingThisCA || (currentActiveIframe === 'x')) {
         console.log('Switching to new CA page:', event.data.contractAddress);
-        lastCaDetectedOnX = event.data.contractAddress;
         
         // Remember previous active iframe
         const previousActiveIframe = currentActiveIframe;
@@ -813,15 +776,13 @@ document.addEventListener('DOMContentLoaded', () => {
       }
 
       const currentTab = tabs[0];
-      showNotification('Current tab URL:', currentTab.url);
-      console.error('Current tab URL:', currentTab.url);
+      console.log('Current tab URL:', currentTab.url);
       
       if (currentTab.url && currentTab.url.includes('gmgn.ai') && currentTab.url.includes('/token/')) {
         // Extract token address
         const tokenAddress = extractContractAddress(currentTab.url);
         if (tokenAddress) {
-          console.error('Found token in active tab:', tokenAddress);
-          lastCaOnGmgnUrl = tokenAddress;
+          console.log('Found token in active tab:', tokenAddress);
           
           // Save the gmgn.ai URL to history
           addToHistory(currentTab.url, 'gmgn');
@@ -831,6 +792,11 @@ document.addEventListener('DOMContentLoaded', () => {
           showNotification(`Searching for ${tokenAddress.slice(0, 8)}... on X`, false);
           return;
         }
+      }
+
+      // if we're on X or Twitter, this is handled by twitter_ca_detector.js
+      if (currentTab.url && (currentTab.url.includes('x.com') || currentTab.url.includes('twitter.com'))) {
+        return;
       }
 
       loadDefaultIframeOnPanel();
@@ -881,7 +847,7 @@ document.addEventListener('DOMContentLoaded', () => {
       chrome.tabs.query({active: true, currentWindow: true}, (tabs) => {
         if (tabs && tabs.length > 0 && tabs[0].id === tabId) {
           // Update swap button state
-          reloadPanelIframe();
+          // reloadPanelIframe();
         }
       });
     }
