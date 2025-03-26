@@ -46,7 +46,6 @@ class TabDetector {
     }
     
     try {
-      console.log(`Forcing scan for tab ${this.tabId}`);
       await chrome.tabs.sendMessage(this.tabId, { action: 'forceScan' });
     } catch (error) {
       console.warn('Error triggering forced scan:', error);
@@ -76,9 +75,9 @@ class TabDetector {
     // Ping the content script periodically to trigger scans
     this.monitorInterval = setInterval(async () => {
       try {
-        await chrome.tabs.sendMessage(this.tabId, { 
-          action: 'checkForCAs',
-        });
+        // await chrome.tabs.sendMessage(this.tabId, { 
+        //   action: 'checkForCAs',
+        // });
       } catch (error) {
         console.warn('Error sending message to content script:', error);
         // If the content script isn't responding, try to re-inject it
@@ -233,18 +232,16 @@ function injectDetectorCode() {
   // Log that we've been injected
   console.log('CA detector content script injected into page context!');
   
-  // Store detected CAs to avoid duplicates
-  const detectedCAs = new Set();
+  // Store state variables for CA detection
   let lastProcessedCA = null;
   let isScrolling = false;
   let scrollTimeout = null;
-  const SCROLL_DELAY = 300; // ms to wait after scrolling stops
   let lastScrollY = window.scrollY;
   let scrollDirection = 'down'; // Track scroll direction
   
   // Add cooldown mechanism to prevent rapid CA switching
   let lastCASelectionTime = 0;
-  const CA_SELECTION_COOLDOWN = 100; // ms to wait before selecting a new CA
+  const CA_SELECTION_COOLDOWN = 300; // ms to wait before selecting a new CA
   
   // Track currently highlighted CAs
   const highlightedCAs = new Map(); // Map of address -> element reference
@@ -300,7 +297,7 @@ function injectDetectorCode() {
   // Special function to detect CAs in links with partial visibility
   function scanLinksForPartialCAs() {
     // Focus on a much broader set of links with potential CAs - don't restrict to t.co
-    const linkElements = document.querySelectorAll('main a');
+    const linkElements = document.querySelectorAll('main a[href^="https://t.co/"]');
     const visibleCAs = [];
     
     let processedCount = 0;
@@ -608,7 +605,7 @@ function injectDetectorCode() {
       return;
     }
     
-    logToPanel('Scanning page for contract addresses...');
+    logToPanel('Scanning page for contract addresses...', new Date().getTime());
     
     // First handle special case: links that contain partial CAs
     const linkCAs = scanLinksForPartialCAs() || [];
@@ -667,14 +664,6 @@ function injectDetectorCode() {
         nodeCount++;
       }
     }
-    
-    // Special case: also check t.co links which often contain CAs
-    const tcoLinks = mainElement.querySelectorAll('a[href^="https://t.co/"]');
-    tcoLinks.forEach(link => {
-      if (!link.hasAttribute('data-bitbot-found-ca') && link.offsetParent !== null) {
-        potentialElements.push(link);
-      }
-    });
     
     logToPanel(`Found ${potentialElements.length} potential text elements to scan`);
     
@@ -783,6 +772,15 @@ function injectDetectorCode() {
       const visibleHeight = Math.max(0, visibleBottom - visibleTop);
       const elementHeight = rect.height;
       
+      // Update position and visibility metrics in the CA object
+      ca.visibleHeight = visibleHeight;
+      ca.position = rect.top;
+      
+      // Calculate center distance from viewport center (for better selection)
+      const elementCenter = (rect.top + rect.bottom) / 2;
+      const viewportCenter = window.innerHeight / 2;
+      ca.centerDistance = Math.abs(elementCenter - viewportCenter);
+      
       // More strict visibility check for final processing - must be in good viewing position
       return (visibleHeight > 0) && 
              ((visibleHeight >= elementHeight * 0.5) || (visibleHeight >= 50)) &&
@@ -794,35 +792,74 @@ function injectDetectorCode() {
       return;
     }
     
-    // Special handling for scrolling up - prioritize CAs that appear at the top of the viewport
-    let caToProcess;
+    // Filter candidates based on the scroll direction and current selected CA
+    let eligibleCAs = confirmedVisibleCAs;
     
-    if (scrollDirection === 'up' && confirmedVisibleCAs.length > 0) {
-      // When scrolling up, prioritize CAs that are newly visible near the top of the screen
-      // Sort by position from top (smaller top value means higher in the viewport)
-      const topCAs = [...confirmedVisibleCAs].sort((a, b) => a.position - b.position);
+    if (lastProcessedCA) {
+      const lastPosition = lastProcessedCA.position;
       
-      // Find a CA that's near the top and likely newly visible
-      for (const ca of topCAs) {
-        const rect = ca.element.getBoundingClientRect();
-        // Consider it newly visible if it's in the top 1/3 of the viewport
-        if (rect.top >= 0 && rect.top < window.innerHeight / 3) {
-          // If this CA is different from the last processed one, use it
-          if (!lastProcessedCA || ca.address !== lastProcessedCA.address) {
-            logToPanel(`Found newly visible CA at top while scrolling up: ${ca.address}`);
-            caToProcess = ca;
-            break;
+      // When scrolling down, only consider CAs below the current one
+      // When scrolling up, only consider CAs above the current one
+      if (scrollDirection === 'down') {
+        eligibleCAs = confirmedVisibleCAs.filter(ca => ca.position > lastPosition);
+        logToPanel(`Scrolling down: filtering to ${eligibleCAs.length} CAs below position ${lastPosition}`);
+        
+        // If no CAs below, always keep the current CA if it's still visible
+        if (eligibleCAs.length === 0) {
+          // Check if the current CA is still visible
+          const currentCA = confirmedVisibleCAs.find(ca => ca.address === lastProcessedCA.address);
+          
+          if (currentCA) {
+            logToPanel('No more CAs below, keeping current selection (bottommost CA)');
+            // Keep the current CA selected
+            return;
+          } else {
+            // Only fall back to all CAs if current CA is completely gone
+            logToPanel('Current CA no longer visible, selecting from all visible CAs');
+            // eligibleCAs = confirmedVisibleCAs;
+          }
+        }
+      } else if (scrollDirection === 'up') {
+        eligibleCAs = confirmedVisibleCAs.filter(ca => ca.position < lastPosition);
+        logToPanel(`Scrolling up: filtering to ${eligibleCAs.length} CAs above position ${lastPosition}`);
+        
+        // If no CAs above, always keep the current CA if it's still visible
+        if (eligibleCAs.length === 0) {
+          // Check if the current CA is still visible
+          const currentCA = confirmedVisibleCAs.find(ca => ca.address === lastProcessedCA.address);
+          
+          if (currentCA) {
+            logToPanel('No more CAs above, keeping current selection (topmost CA)');
+            // Keep the current CA selected
+            return;
+          } else {
+            // Only fall back to all CAs if current CA is completely gone
+            logToPanel('Current CA no longer visible, selecting from all visible CAs');
+            eligibleCAs = confirmedVisibleCAs;
           }
         }
       }
-      
-      // If no suitable CA found for scrolling up, fall back to most visible one
-      if (!caToProcess) {
-        caToProcess = getDefaultCA(confirmedVisibleCAs);
+    }
+    
+    // If we found eligible CAs, select the best one based on our criteria
+    let caToProcess;
+    
+    if (eligibleCAs.length > 0) {
+      if (scrollDirection === 'down') {
+        // When scrolling down, prefer the topmost eligible CA
+        caToProcess = [...eligibleCAs].sort((a, b) => a.position - b.position)[0];
+        logToPanel(`Selected topmost CA while scrolling down: position ${caToProcess.position}`);
+      } else if (scrollDirection === 'up') {
+        // When scrolling up, prefer the bottommost eligible CA
+        caToProcess = [...eligibleCAs].sort((a, b) => b.position - a.position)[0];
+        logToPanel(`Selected bottommost CA while scrolling up: position ${caToProcess.position}`);
+      } else {
+        // If not scrolling, use default selection criteria
+        caToProcess = getDefaultCA(eligibleCAs);
       }
     } else {
-      // For scrolling down or when direction isn't relevant, use standard logic
-      caToProcess = getDefaultCA(confirmedVisibleCAs);
+      // keep current CA selection if no eligible CAs found
+      // caToProcess = getDefaultCA(confirmedVisibleCAs);
     }
     
     processSelectedCA(caToProcess);
@@ -924,6 +961,10 @@ function injectDetectorCode() {
         // Get the original CA text (without the button)
         const caAddress = span.getAttribute('data-address');
         
+        // First remove any buttons inside the span
+        const buttons = span.querySelectorAll('.bitbot-ca-button');
+        buttons.forEach(btn => btn.parentNode.removeChild(btn));
+        
         // Create a new text node with just the CA address
         const textNode = document.createTextNode(caAddress || span.firstChild.textContent);
         
@@ -941,36 +982,23 @@ function injectDetectorCode() {
     const highlightedLinks = document.querySelectorAll('.bitbot-ca-link-highlight');
     highlightedLinks.forEach(link => {
       try {
-        // Remove styling
-        link.style.border = '';
-        link.style.borderRadius = '';
-        link.style.padding = '';
-        link.style.margin = '';
-        link.style.display = '';
-        link.style.alignItems = '';
+        // First remove any buttons inside the link (for absolute positioning)
+        const buttons = link.querySelectorAll('.bitbot-ca-button');
+        buttons.forEach(btn => btn.parentNode.removeChild(btn));
+        
+        // Restore original link styling
+        link.style.position = '';
         link.classList.remove('bitbot-ca-link-highlight');
         
-        // Critical fix: Remove the data-bitbot-found-ca attribute so the link can be re-processed
+        // Critical fix: Remove data attributes so the link can be re-processed
         link.removeAttribute('data-bitbot-found-ca');
         link.removeAttribute('data-address');
-        
-        // Remove ALL associated buttons - checking multiple siblings
-        let nextNode = link.nextSibling;
-        while (nextNode) {
-          if (nextNode.classList && nextNode.classList.contains('bitbot-ca-button')) {
-            const nodeToRemove = nextNode;
-            nextNode = nextNode.nextSibling; // Move to next before removing
-            nodeToRemove.parentNode.removeChild(nodeToRemove);
-          } else {
-            nextNode = nextNode.nextSibling;
-          }
-        }
       } catch (e) {
         logToPanel('Error removing link highlight: ' + e.message);
       }
     });
     
-    // Clean up any orphaned Bitbot buttons that might remain
+    // Clean up any orphaned Bitbot buttons that might remain outside of links/spans
     const allButtons = document.querySelectorAll('.bitbot-ca-button');
     allButtons.forEach(button => {
       try {
@@ -1009,17 +1037,17 @@ function injectDetectorCode() {
     const beforeText = text.substring(0, caIndex);
     const afterText = text.substring(caIndex + caAddress.length);
     
-    // Create the highlighted span for the CA
+    // Create the highlighted span for the CA with position:relative
     const highlightSpan = document.createElement('span');
     highlightSpan.className = 'bitbot-ca-highlight';
     highlightSpan.textContent = caAddress;
     highlightSpan.setAttribute('data-address', caAddress); // Add address as data attribute for later lookup
-    highlightSpan.style.cssText = 'display: inline-flex; align-items: center;';
+    highlightSpan.style.cssText = 'position: relative; display: inline-block; padding-right: 60px;'; // Add padding for button
     
-    // Create Bitbot button
+    // Create Bitbot button with position:absolute
     const button = document.createElement('button');
     button.className = 'bitbot-ca-button';
-    button.style.cssText = 'background: linear-gradient(45deg, #ff8c00, #ff6347); color: white; border: none; border-radius: 4px; margin-left: 4px; padding: 1px 4px; font-size: 10px; cursor: pointer; display: inline-flex; align-items: center;';
+    button.style.cssText = 'position: absolute; right: 0; top: 50%; transform: translateY(-50%); background: linear-gradient(45deg, #ff8c00, #ff6347); color: white; border: none; border-radius: 4px; margin-left: 4px; padding: 1px 4px; font-size: 10px; cursor: pointer; display: inline-flex; align-items: center; z-index: 9999;';
     
     // Create icon for button
     let iconElement;
@@ -1064,7 +1092,7 @@ function injectDetectorCode() {
       });
     });
     
-    // Add button to highlighted span
+    // Add button to the highlight span
     highlightSpan.appendChild(button);
     
     // Replace the original text node with our highlighted version
@@ -1079,7 +1107,7 @@ function injectDetectorCode() {
     parent.insertBefore(highlightSpan, afterNode);
     parent.insertBefore(beforeNode, highlightSpan);
     
-    logToPanel('Successfully highlighted CA text with Bitbot button');
+    logToPanel('Successfully highlighted CA text with absolute positioned Bitbot button');
   }
   
   // Function to highlight a link element containing a CA
@@ -1099,19 +1127,23 @@ function injectDetectorCode() {
       }
     }
     
+    // Since we're using absolute positioning, we need to create a wrapper if the link isn't already positioned
+    const currentPosition = window.getComputedStyle(linkElement).position;
+    if (currentPosition === 'static') {
+      linkElement.style.position = 'relative';
+    }
+    
     // Add a special class for styling
     linkElement.classList.add('bitbot-ca-link-highlight');
     
     // Store the original address for reference
     linkElement.setAttribute('data-address', caAddress);
+    linkElement.setAttribute('data-bitbot-found-ca', 'true');
     
-    // Set styling similar to text CA highlights
-    linkElement.style.cssText = 'display: inline-flex; align-items: center;';
-    
-    // Create Bitbot button to appear after the link
+    // Create Bitbot button with absolute positioning
     const button = document.createElement('button');
     button.className = 'bitbot-ca-button';
-    button.style.cssText = 'background: linear-gradient(45deg, #ff8c00, #ff6347); color: white; border: none; border-radius: 4px; margin-left: 4px; padding: 1px 4px; font-size: 10px; cursor: pointer; display: inline-flex; align-items: center;';
+    button.style.cssText = 'position: absolute; right: -60px; top: 50%; transform: translateY(-50%); background: linear-gradient(45deg, #ff8c00, #ff6347); color: white; border: none; border-radius: 4px; padding: 1px 4px; font-size: 10px; cursor: pointer; display: inline-flex; align-items: center; z-index: 9999;';
     
     // Create icon for button
     let iconElement;
@@ -1156,50 +1188,36 @@ function injectDetectorCode() {
       });
     });
     
-    // Insert the button after the link
-    if (linkElement.nextSibling) {
-      linkElement.parentNode.insertBefore(button, linkElement.nextSibling);
-    } else {
-      linkElement.parentNode.appendChild(button);
-    }
+    // Append the button directly to the link element for absolute positioning
+    linkElement.appendChild(button);
     
-    logToPanel('Successfully highlighted link element with Bitbot button');
+    logToPanel('Successfully highlighted link element with absolute positioned Bitbot button');
   }
   
   // Set up scroll event listener
   function setupScrollListener() {
     logToPanel('Setting up scroll listener');
-    let lastScrollDistance = 0;
-    let scrollAccumulator = 0;
-    const SIGNIFICANT_SCROLL = 200; // Pixels of scrolling considered significant
+    let lastKnownScrollY = window.scrollY;
+    const MIN_SCROLL_THRESHOLD = 20; // Minimum pixels to scroll before triggering handler
     
     window.addEventListener('scroll', () => {
+      const currentScrollY = window.scrollY;
+      const scrollDistance = Math.abs(currentScrollY - lastKnownScrollY);
+      
+      // Only process scroll events if the distance exceeds our threshold
+      if (scrollDistance < MIN_SCROLL_THRESHOLD) {
+        return; // Skip this scroll event
+      }
+      
+      // Update last known position for next comparison
+      lastKnownScrollY = currentScrollY;
+      
+      // Process significant scroll event
       isScrolling = true;
       
       // Detect scroll direction
-      const currentScrollY = window.scrollY;
-      const scrollDistance = Math.abs(currentScrollY - lastScrollY);
       scrollDirection = currentScrollY < lastScrollY ? 'up' : 'down';
-      
-      // Track total scrolling since last scan
-      scrollAccumulator += scrollDistance;
       lastScrollY = currentScrollY;
-      
-      // If we've scrolled significantly, clear the highlight state
-      // This ensures we can properly reevaluate all visible CAs
-      if (scrollAccumulator > SIGNIFICANT_SCROLL) {
-        // Clear link highlights for links that aren't fully visible
-        document.querySelectorAll('.bitbot-ca-link-highlight').forEach(link => {
-          const rect = link.getBoundingClientRect();
-          if (rect.top > window.innerHeight * 0.8 || rect.bottom < window.innerHeight * 0.2) {
-            // Only remove highlight if it's leaving the main viewing area
-            link.classList.remove('bitbot-ca-link-highlight');
-          }
-        });
-        
-        // Reset scroll accumulator
-        scrollAccumulator = 0;
-      }
       
       // Clear previous timeout
       if (scrollTimeout) {
@@ -1248,43 +1266,65 @@ function injectDetectorCode() {
   // Set up mutation observer to detect dynamic content changes
   function setupMutationObserver() {
     logToPanel('Setting up mutation observer');
+    
+    // Add tracking for significant mutations
+    let significantChangeCount = 0;
+    let lastMutationTime = 0;
+    const MUTATION_COOLDOWN = 5000; // 5 seconds minimum between scans
+    
     const observer = new MutationObserver(mutations => {
-      let shouldScan = false;
+      // Skip observations if we're in cooldown
+      const now = Date.now();
+      if (now - lastMutationTime < MUTATION_COOLDOWN) {
+        return;
+      }
+      
+      // Only count significant mutations that could contain CAs
+      let newSignificantChanges = 0;
       
       // Look for significant DOM changes that might contain new CAs
       for (const mutation of mutations) {
         if (mutation.type === 'childList' && mutation.addedNodes.length > 0) {
           for (const node of mutation.addedNodes) {
+            // Only count elements that might contain CAs (divs with substantial content)
             if (node.nodeType === Node.ELEMENT_NODE && 
-                (node.tagName === 'DIV' || node.tagName === 'SPAN' || 
-                 node.tagName === 'P' || node.tagName === 'A')) {
-              shouldScan = true;
-              break;
+                (node.tagName === 'DIV' || node.tagName === 'ARTICLE') &&
+                node.textContent && node.textContent.length > 100) {
+              
+              newSignificantChanges++;
+              
+              // Stop counting after a reasonable threshold
+              if (newSignificantChanges >= 3) {
+                break;
+              }
             }
           }
         }
         
-        if (shouldScan) break;
+        if (newSignificantChanges >= 3) break;
       }
       
-      // Only scan if we found significant changes and not currently scrolling
-      if (shouldScan && !isScrolling) {
-        // Wait a bit for the DOM to settle after changes
+      // Accumulate significant changes
+      significantChangeCount += newSignificantChanges;
+      
+      // Only trigger a scan after multiple significant changes (like a new tweet loading)
+      // and when not scrolling and not in CA selection cooldown
+      if (significantChangeCount >= 5 && !isScrolling) {
+        // Reset counter
+        significantChangeCount = 0;
+        lastMutationTime = now;
+        
+        // Check for CA selection cooldown
+        const cooldownRemaining = CA_SELECTION_COOLDOWN - (now - lastCASelectionTime);
+        if (cooldownRemaining > 0) {
+          return; // Skip scanning during cooldown
+        }
+        
+        // Debounce the scan
         setTimeout(() => {
-          logToPanel('DOM changed, scanning for new CAs...');
-          
-          // Check if we're in cooldown period before initiating a scan
-          const cooldownRemaining = CA_SELECTION_COOLDOWN - (Date.now() - lastCASelectionTime);
-          if (cooldownRemaining > 0) {
-            logToPanel(`In CA selection cooldown, waiting ${cooldownRemaining}ms before scanning`);
-            // Schedule scan after cooldown expires
-            setTimeout(() => {
-              scanForContractAddresses();
-            }, cooldownRemaining);
-          } else {
-            scanForContractAddresses();
-          }
-        }, 500);
+          logToPanel('Significant DOM changes detected, scanning for new CAs...');
+          scanForContractAddresses();
+        }, 1000);
       }
     });
     
@@ -1292,16 +1332,8 @@ function injectDetectorCode() {
     observer.observe(document.body, {
       childList: true,
       subtree: true,
-      characterData: true
+      characterData: false // Don't observe text changes, only structure
     });
-  }
-  
-  // Periodic scanner function - disabled as per requirement
-  function setupPeriodicScanner() {
-    logToPanel('Periodic scanner disabled - scanning only after scrolling stops');
-    
-    // Periodic scanning has been disabled to prevent unwanted CA switching
-    // Now only scanning 300ms after scrolling stops
   }
   
   // Listen for messages from the panel script
@@ -1373,8 +1405,7 @@ function injectDetectorCode() {
     
     // Set up event listeners
     setupScrollListener();
-    setupMutationObserver();
-    setupPeriodicScanner();
+    // setupMutationObserver();
   }
   
   // Run initialization
