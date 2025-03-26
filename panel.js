@@ -30,7 +30,8 @@ document.addEventListener('DOMContentLoaded', () => {
   const MAX_HISTORY_SIZE = 100;
   
   // Track the last token we've detected to avoid redundant searches
-  let lastDetectedToken = null;
+  let lastCaDetectedOnX = null;
+  let lastCaOnGmgnUrl = null;
   
   // Function to load history from localStorage
   function loadHistoryFromLocalStorage(iframeId) {
@@ -53,6 +54,30 @@ document.addEventListener('DOMContentLoaded', () => {
       console.error(`Error saving ${iframeId} history to localStorage:`, e);
     }
   }
+
+  /**
+   * Switch to the specified iframe, set global variables and update UI
+   * @param {'x' | 'gmgn'} iframeId 
+   */
+  function switchIframeTo(iframeId) {
+    currentActiveIframe = iframeId;
+    if (iframeId === 'x') {
+      iframeX.style.display = '';
+      iframeX.style.opacity = '1';
+      iframeX.classList.add('active');
+      iframeGmgn.classList.remove('active');
+      btnXIcon.classList.add('active');
+      btnGmgnIcon.classList.remove('active');
+    } else {
+      iframeGmgn.style.display = '';
+      iframeGmgn.style.opacity = '1';
+      iframeGmgn.classList.add('active');
+      iframeX.classList.remove('active');
+      btnGmgnIcon.classList.add('active');
+      btnXIcon.classList.remove('active');
+    }
+    updateNavigationState();
+  }
   
   // Function to toggle between iframes
   async function toggleIframeSource(showX) {
@@ -68,18 +93,7 @@ document.addEventListener('DOMContentLoaded', () => {
     
     // Update button states
     if (showX) {
-      btnXIcon.classList.add('active');
-      btnGmgnIcon.classList.remove('active');
-      
-      // Show X iframe, hide GMGN iframe
-      iframeX.classList.add('active');
-      iframeGmgn.classList.remove('active');
-      
-      // Reset any inline styles that might interfere with visibility
-      iframeX.style.display = '';
-      iframeX.style.opacity = '1';
-      
-      currentActiveIframe = 'x';
+      switchIframeTo('x');
       
       // If X iframe hasn't been loaded yet, load it
       if (!iframeX.getAttribute('data-loaded')) {
@@ -90,18 +104,7 @@ document.addEventListener('DOMContentLoaded', () => {
         showNotification('Showing X.com', false);
       }
     } else {
-      btnGmgnIcon.classList.add('active');
-      btnXIcon.classList.remove('active');
-      
-      // Show GMGN iframe, hide X iframe
-      iframeGmgn.classList.add('active');
-      iframeX.classList.remove('active');
-      
-      // Reset any inline styles that might interfere with visibility
-      iframeGmgn.style.display = '';
-      iframeGmgn.style.opacity = '1';
-      
-      currentActiveIframe = 'gmgn';
+      switchIframeTo('gmgn');
       
       // If GMGN iframe hasn't been loaded yet, load it
       if (!iframeGmgn.getAttribute('data-loaded')) {
@@ -175,8 +178,8 @@ document.addEventListener('DOMContentLoaded', () => {
       if (currentActiveIframe === 'x' && 
           currentUrl && currentUrl.includes('search?q=') &&
           (!previousUrl || !previousUrl.includes('search?q='))) {
-        console.log('Navigating away from token search, resetting lastDetectedToken');
-        lastDetectedToken = null;
+        console.log('Navigating away from token search, resetting lastCaDetectedOnX');
+        lastCaDetectedOnX = null;
       }
       
       history.current--;
@@ -206,8 +209,8 @@ document.addEventListener('DOMContentLoaded', () => {
       if (currentActiveIframe === 'x' && 
           currentUrl && currentUrl.includes('search?q=') &&
           (!nextUrl || !nextUrl.includes('search?q='))) {
-        console.log('Navigating away from token search, resetting lastDetectedToken');
-        lastDetectedToken = null;
+        console.log('Navigating away from token search, resetting lastCaDetectedOnX');
+        lastCaDetectedOnX = null;
       }
       
       history.current++;
@@ -243,31 +246,6 @@ document.addEventListener('DOMContentLoaded', () => {
     }
   }
   
-  // Function to go home (load the default page for current iframe)
-  async function goHome(site) {
-    if (isLoadingInProgress) return;
-    
-    if (site === 'x' || (site === undefined && currentActiveIframe === 'x')) {
-      await loadIframe(iframeX, X_URL, 'Loading X.com home', 'x');
-      addToHistory(X_URL, 'x');
-      // Update the active state
-      btnXIcon.classList.add('active');
-      btnGmgnIcon.classList.remove('active');
-      iframeX.classList.add('active');
-      iframeGmgn.classList.remove('active');
-      currentActiveIframe = 'x';
-    } else {
-      await loadIframe(iframeGmgn, GMGN_URL, 'Loading pmgn.ai home', 'gmgn');
-      addToHistory(GMGN_URL, 'gmgn');
-      // Update the active state
-      btnGmgnIcon.classList.add('active');
-      btnXIcon.classList.remove('active');
-      iframeGmgn.classList.add('active');
-      iframeX.classList.remove('active');
-      currentActiveIframe = 'gmgn';
-    }
-  }
-  
   // Function to extract contract address from gmgn.ai token URL
   function extractContractAddress(url) {
     // URL pattern: https://gmgn.ai/sol/token/CONTRACT_ADDRESS
@@ -300,19 +278,11 @@ document.addEventListener('DOMContentLoaded', () => {
     
     const searchUrl = `https://x.com/search?q=${encodeURIComponent(contractAddress)}`;
     
-    // Switch to X iframe
-    btnXIcon.classList.add('active');
-    btnGmgnIcon.classList.remove('active');
-    iframeX.classList.add('active');
-    iframeGmgn.classList.remove('active');
-    currentActiveIframe = 'x';
-    
     // Load the search URL
     await loadIframe(iframeX, searchUrl, `Searching for token on X.com`, 'x');
     addToHistory(searchUrl, 'x');
     
-    // Update navigation state
-    updateNavigationState();
+    switchIframeTo('x');
   }
   
   // Function to check if current URL is a token page and automatically search on X
@@ -435,11 +405,11 @@ document.addEventListener('DOMContentLoaded', () => {
       if (url.includes('x.com')) {
         showNotification('Showing X.com', false);
         
-        // If we're navigating to a non-search page in X.com, reset the lastDetectedToken
+        // If we're navigating to a non-search page in X.com, reset the lastCaDetectedOnX
         // so we can detect the same token again if needed
         if (!url.includes('search?q=')) {
-          console.log('Resetting lastDetectedToken due to navigation to non-search X.com page');
-          lastDetectedToken = null;
+          console.log('Resetting lastCaDetectedOnX due to navigation to non-search X.com page');
+          lastCaDetectedOnX = null;
         }
       } else if (url.includes('gmgn.ai')) {
         showNotification('Showing pmgn.ai', false);
@@ -450,8 +420,8 @@ document.addEventListener('DOMContentLoaded', () => {
       // For gmgn.ai token pages, check if it's a new token
       if (iframeId === 'gmgn' && url.includes('/token/')) {
         const token = extractContractAddress(url);
-        if (token && token !== lastDetectedToken) {
-          lastDetectedToken = token;
+        if (token && token !== lastCaOnGmgnUrl) {
+          lastCaOnGmgnUrl = token;
           // Check if it's a token page
           checkForTokenPage(url, iframeId);
         }
@@ -705,6 +675,54 @@ document.addEventListener('DOMContentLoaded', () => {
       });
     }
   }
+
+  /**
+   * if we're on pages other than X or Twitter, keep the current page loaded in the panel
+   * if we're on X or Twitter, load the last visited gmgn.ai page in the panel
+   * if we're on a gmgn.ai page, load the last visited X.com page in the panel
+   */
+  function loadDefaultIframeOnPanel() {
+    chrome.tabs.query({active: true, currentWindow: true}, async function(tabs) {
+      let panelToLoad = 'unchanged';
+      if (tabs && tabs.length > 0) {
+        const currentTab = tabs[0];
+        if (currentTab.url && (currentTab.url.includes('x.com') || currentTab.url.includes('twitter.com'))) {
+          panelToLoad = 'gmgn';
+        } else if (currentTab.url && currentTab.url.includes('gmgn.ai')) {
+          panelToLoad = 'x';
+        }
+      }
+
+      if (panelToLoad === 'unchanged') {
+        return;
+      }
+      
+      if (panelToLoad === 'gmgn') {
+        if (gmgnHistory && gmgnHistory.urls && gmgnHistory.urls.length > 0 && gmgnHistory.current >= 0) {
+          const lastGmgnUrl = gmgnHistory.urls[gmgnHistory.current];
+          loadIframe(iframeGmgn, lastGmgnUrl, 'Loading last visited gmgn.ai page', 'gmgn');
+          addToHistory(lastGmgnUrl, 'gmgn');
+        } else {
+          loadIframe(iframeGmgn, GMGN_URL, 'Loading gmgn.ai', 'gmgn');
+          addToHistory(GMGN_URL, 'gmgn');
+        }
+        switchIframeTo('gmgn');
+        return;
+      }
+
+      // Try to load last X URL from history
+      if (xHistory && xHistory.urls && xHistory.urls.length > 0 && xHistory.current >= 0) {
+        const lastXUrl = xHistory.urls[xHistory.current];
+        loadIframe(iframeX, lastXUrl, 'Loading last visited X.com page', 'x');
+        addToHistory(lastXUrl, 'x');
+      } else {
+        // Fall back to default X.com
+        loadIframe(iframeX, X_URL, 'Loading X.com', 'x');
+        addToHistory(X_URL, 'x');
+      }
+      switchIframeTo('x');
+    });
+  }
   
   // Set up service worker message listener
   navigator.serviceWorker.addEventListener('message', (event) => {
@@ -722,8 +740,8 @@ document.addEventListener('DOMContentLoaded', () => {
       addToHistory(event.data.gmgnUrl, 'gmgn');
       
       // Check if the token is different from last detected
-      if (event.data.tokenAddress !== lastDetectedToken) {
-        lastDetectedToken = event.data.tokenAddress;
+      if (event.data.tokenAddress !== lastCaOnGmgnUrl) {
+        lastCaOnGmgnUrl = event.data.tokenAddress;
         
         // Search for this token on X
         searchTokenOnX(event.data.tokenAddress);
@@ -747,17 +765,13 @@ document.addEventListener('DOMContentLoaded', () => {
       // If the CA is not the same as the currently displayed one, or if it's not a gmgn.ai page, switch to the new CA
       if (!isShowingThisCA || !currentGmgnUrl.includes('gmgn.ai')) {
         console.log('Switching to new CA page:', event.data.contractAddress);
-        lastDetectedToken = event.data.contractAddress;
+        lastCaDetectedOnX = event.data.contractAddress;
         
         // Remember previous active iframe
         const previousActiveIframe = currentActiveIframe;
         
         // Switch to gmgn iframe and load the token page
-        btnGmgnIcon.classList.add('active');
-        btnXIcon.classList.remove('active');
-        iframeGmgn.classList.add('active');
-        iframeX.classList.remove('active');
-        currentActiveIframe = 'gmgn';
+        switchIframeTo('gmgn');
         
         // Load the gmgn.ai token page 
         loadIframe(iframeGmgn, gmgnUrl, `Loading token on gmgn.ai`, 'gmgn');
@@ -778,6 +792,50 @@ document.addEventListener('DOMContentLoaded', () => {
       }
     }
   });
+
+  function reloadPanelIframe(loadDefaultX = false) {
+    updateSwapButtonState();
+    if (loadDefaultX) {
+      loadDefaultIframeOnPanel();
+      return;
+    }
+
+    if (!chrome || !chrome.tabs) {
+      loadDefaultIframeOnPanel();
+      return;
+    }
+
+    chrome.tabs.query({active: true, currentWindow: true}, async function(tabs) {
+      console.log('chrome.tabs.query reloadPanelIframe tabs', tabs);
+      if (!tabs || tabs.length === 0) {
+        loadDefaultIframeOnPanel();
+        return;
+      }
+
+      const currentTab = tabs[0];
+      showNotification('Current tab URL:', currentTab.url);
+      console.error('Current tab URL:', currentTab.url);
+      
+      if (currentTab.url && currentTab.url.includes('gmgn.ai') && currentTab.url.includes('/token/')) {
+        // Extract token address
+        const tokenAddress = extractContractAddress(currentTab.url);
+        if (tokenAddress) {
+          console.error('Found token in active tab:', tokenAddress);
+          lastCaOnGmgnUrl = tokenAddress;
+          
+          // Save the gmgn.ai URL to history
+          addToHistory(currentTab.url, 'gmgn');
+          searchTokenOnX(tokenAddress);
+          
+          // Show notification
+          showNotification(`Searching for ${tokenAddress.slice(0, 8)}... on X`, false);
+          return;
+        }
+      }
+
+      loadDefaultIframeOnPanel();
+    });
+  }
   
   // Initialize service worker
   async function initServiceWorker() {
@@ -797,159 +855,16 @@ document.addEventListener('DOMContentLoaded', () => {
         showNotification('Panel ready', false);
         
         // Check if current tab has a gmgn.ai token page
-        if (chrome && chrome.tabs) {
-          chrome.tabs.query({active: true, currentWindow: true}, async function(tabs) {
-            if (tabs && tabs.length > 0) {
-              const currentTab = tabs[0];
-              console.log('Current tab URL:', currentTab.url);
-              
-              if (currentTab.url && currentTab.url.includes('gmgn.ai') && currentTab.url.includes('/token/')) {
-                // Extract token address
-                const tokenAddress = extractContractAddress(currentTab.url);
-                if (tokenAddress) {
-                  console.log('Found token in active tab:', tokenAddress);
-                  lastDetectedToken = tokenAddress;
-                  
-                  // Save the gmgn.ai URL to history
-                  addToHistory(currentTab.url, 'gmgn');
-                  
-                  // Load X with token search
-                  const searchUrl = `https://x.com/search?q=${encodeURIComponent(tokenAddress)}`;
-                  await loadIframe(iframeX, searchUrl, `Searching for token on X.com`, 'x');
-                  addToHistory(searchUrl, 'x');
-                  
-                  // Show notification
-                  showNotification(`Searching for ${tokenAddress.slice(0, 8)}... on X`, false);
-                  return; // Skip the default X.com loading
-                }
-              }
-              
-              // Check if the current tab is X.com or Twitter
-              if (currentTab.url && (currentTab.url.includes('x.com') || currentTab.url.includes('twitter.com'))) {
-                console.log('Current tab is X.com or Twitter, triggering CA scan');
-                
-                // Show loading indicator while scanning
-                showLoading(true);
-                showNotification('Scanning for contract addresses...', false);
-                
-                // Try to trigger CA scanning in the x.com tab
-                try {
-                  // First check if detector script is running
-                  chrome.tabs.sendMessage(currentTab.id, { action: 'ping' }, function(response) {
-                    if (chrome.runtime.lastError) {
-                      console.log('CA detector not running, may need to inject script');
-                      
-                      // Send message to service worker to ensure detector is injected
-                      if (navigator.serviceWorker && navigator.serviceWorker.controller) {
-                        navigator.serviceWorker.controller.postMessage({
-                          type: 'ENSURE_DETECTOR',
-                          tabId: currentTab.id
-                        });
-                      }
-                      
-                      // Still attempt a force scan in case the script is actually there
-                      setTimeout(() => {
-                        chrome.tabs.sendMessage(currentTab.id, { action: 'forceScan', override: true });
-                        
-                        // Hide loading after a reasonable timeout if we don't get a message back
-                        setTimeout(() => {
-                          showLoading(false);
-                        }, 2500);
-                      }, 500);
-                    } else if (response && response.pong) {
-                      // Content script is running, trigger a scan
-                      console.log('CA detector is running, triggering scan');
-                      chrome.tabs.sendMessage(currentTab.id, { action: 'forceScan', override: true });
-                      
-                      // Hide loading after a reasonable timeout if we don't get a message back
-                      setTimeout(() => {
-                        showLoading(false);
-                      }, 2500);
-                    } else {
-                      // Strange response, hide loading
-                      showLoading(false);
-                    }
-                  });
-                } catch (error) {
-                  console.error('Error triggering CA scan:', error);
-                  showLoading(false);
-                }
-                
-                return; // Skip loading X.com
-              }
-              
-              // Check if the current tab is NOT on x.com or gmgn.ai
-              const isNotXOrGmgn = currentTab.url && 
-                                  !currentTab.url.includes('x.com') && 
-                                  !currentTab.url.includes('twitter.com') && 
-                                  !currentTab.url.includes('gmgn.ai');
-              
-              if (isNotXOrGmgn) {
-                // Check if there's X.com browsing history
-                if (xHistory && xHistory.urls && xHistory.urls.length > 0 && xHistory.current >= 0) {
-                  // Get the last visited URL from X.com history
-                  const lastXUrl = xHistory.urls[xHistory.current];
-                  console.log('Loading last visited X URL from history:', lastXUrl);
-                  
-                  // Load the last visited X.com URL
-                  await loadIframe(iframeX, lastXUrl, 'Loading last visited X.com page', 'x');
-                  return; // Skip the default X.com loading
-                }
-              }
-              
-              // Default: load X.com homepage
-              loadIframe(iframeX, X_URL, 'Loading X.com', 'x');
-              addToHistory(X_URL, 'x');
-            } else {
-              // Fallback to default X.com if tabs API fails
-              loadIframe(iframeX, X_URL, 'Loading X.com', 'x');
-              addToHistory(X_URL, 'x');
-            }
-          });
-        } else {
-          // If tabs API is not available, try to load last X URL from history
-          if (xHistory && xHistory.urls && xHistory.urls.length > 0 && xHistory.current >= 0) {
-            // Get the last visited URL from X.com history
-            const lastXUrl = xHistory.urls[xHistory.current];
-            console.log('Loading last visited X URL from history (no tabs API):', lastXUrl);
-            setTimeout(() => {
-              loadIframe(iframeX, lastXUrl, 'Loading last visited X.com page', 'x');
-            }, 500);
-          } else {
-            // Fall back to default X.com
-            setTimeout(() => {
-              loadIframe(iframeX, X_URL, 'Loading X.com', 'x');
-              addToHistory(X_URL, 'x');
-            }, 500);
-          }
-        }
+        reloadPanelIframe();
       } catch (error) {
         console.error('Service Worker registration failed:', error);
         showNotification('Service worker registration failed', true);
-        
-        // Try to load last X URL from history even if service worker fails
-        if (xHistory && xHistory.urls && xHistory.urls.length > 0 && xHistory.current >= 0) {
-          const lastXUrl = xHistory.urls[xHistory.current];
-          loadIframe(iframeX, lastXUrl, 'Loading last visited X.com page', 'x');
-        } else {
-          // Fall back to default X.com
-          loadIframe(iframeX, X_URL, 'Loading X.com', 'x');
-          addToHistory(X_URL, 'x');
-        }
+        reloadPanelIframe(true);
       }
     } else {
       console.error('Service Workers are not supported in this browser.');
       showNotification('Service Workers not supported', true);
-      
-      // Try to load last X URL from history
-      if (xHistory && xHistory.urls && xHistory.urls.length > 0 && xHistory.current >= 0) {
-        const lastXUrl = xHistory.urls[xHistory.current];
-        loadIframe(iframeX, lastXUrl, 'Loading last visited X.com page', 'x');
-      } else {
-        // Fall back to default X.com
-        loadIframe(iframeX, X_URL, 'Loading X.com', 'x');
-        addToHistory(X_URL, 'x');
-      }
+      reloadPanelIframe(true);
     }
   }
   
@@ -966,82 +881,7 @@ document.addEventListener('DOMContentLoaded', () => {
       chrome.tabs.query({active: true, currentWindow: true}, (tabs) => {
         if (tabs && tabs.length > 0 && tabs[0].id === tabId) {
           // Update swap button state
-          updateSwapButtonState();
-          
-          const tabUrl = tabs[0].url;
-          
-          // When on X.com or twitter.com, ensure gmgn.ai is loaded in the panel
-          if (tabUrl && (tabUrl.includes('x.com') || tabUrl.includes('twitter.com'))) {
-            console.log('Detected X/Twitter tab, triggering CA scan');
-            
-            // Show loading indicator while scanning
-            showLoading(true);
-            showNotification('Scanning for contract addresses...', false);
-            
-            // Try to trigger CA scanning in the x.com tab
-            try {
-              // First check if detector script is running
-              chrome.tabs.sendMessage(tabs[0].id, { action: 'ping' }, function(response) {
-                if (chrome.runtime.lastError) {
-                  console.log('CA detector not running, may need to inject script');
-                  
-                  // Send message to service worker to ensure detector is injected
-                  if (navigator.serviceWorker && navigator.serviceWorker.controller) {
-                    navigator.serviceWorker.controller.postMessage({
-                      type: 'ENSURE_DETECTOR',
-                      tabId: tabs[0].id
-                    });
-                  }
-                  
-                  // Still attempt a force scan in case the script is actually there
-                  setTimeout(() => {
-                    chrome.tabs.sendMessage(tabs[0].id, { action: 'forceScan', override: true });
-                    
-                    // Hide loading after a reasonable timeout if we don't get a message back
-                    setTimeout(() => {
-                      showLoading(false);
-                    }, 2500);
-                  }, 500);
-                } else if (response && response.pong) {
-                  // Content script is running, trigger a scan
-                  console.log('CA detector is running, triggering scan');
-                  chrome.tabs.sendMessage(tabs[0].id, { action: 'forceScan', override: true });
-                  
-                  // Hide loading after a reasonable timeout if we don't get a message back
-                  setTimeout(() => {
-                    showLoading(false);
-                  }, 2500);
-                } else {
-                  // Strange response, hide loading
-                  showLoading(false);
-                }
-              });
-            } catch (error) {
-              console.error('Error triggering CA scan:', error);
-              showLoading(false);
-            }
-          }
-          
-          // Check if the current tab is a gmgn.ai token page
-          if (tabUrl && tabUrl.includes('gmgn.ai') && tabUrl.includes('/token/')) {
-            console.log('Detected gmgn token page in main browser window:', tabUrl);
-            
-            // Extract token address - properly handle referral codes
-            const tokenAddress = extractContractAddress(tabUrl);
-            if (tokenAddress && tokenAddress !== lastDetectedToken) {
-              console.log('New token detected in main browser window:', tokenAddress);
-              lastDetectedToken = tokenAddress;
-              
-              // Save the gmgn.ai URL to history
-              addToHistory(tabUrl, 'gmgn');
-              
-              // Automatically search for this token on X if enabled
-              searchTokenOnX(tokenAddress);
-              
-              // Show notification
-              showNotification(`Searching for ${tokenAddress.slice(0, 8)}... on X`, false);
-            }
-          }
+          reloadPanelIframe();
         }
       });
     }
@@ -1049,66 +889,7 @@ document.addEventListener('DOMContentLoaded', () => {
   
   // Monitor tab activation changes
   chrome.tabs.onActivated.addListener(() => {
-    updateSwapButtonState();
-    
-    // Check if the newly activated tab is X.com/Twitter and ensure gmgn.ai is loaded
-    chrome.tabs.query({active: true, currentWindow: true}, (tabs) => {
-      if (tabs && tabs.length > 0) {
-        const tabUrl = tabs[0].url;
-        
-        // When on X.com or twitter.com, ensure gmgn.ai is loaded in the panel
-        if (tabUrl && (tabUrl.includes('x.com') || tabUrl.includes('twitter.com'))) {
-          console.log('Activated X/Twitter tab, triggering CA scan');
-          
-          // Show loading indicator while scanning
-          showLoading(true);
-          showNotification('Scanning for contract addresses...', false);
-          
-          // Try to trigger CA scanning in the x.com tab
-          try {
-            // First check if detector script is running
-            chrome.tabs.sendMessage(tabs[0].id, { action: 'ping' }, function(response) {
-              if (chrome.runtime.lastError) {
-                console.log('CA detector not running, may need to inject script');
-                
-                // Send message to service worker to ensure detector is injected
-                if (navigator.serviceWorker && navigator.serviceWorker.controller) {
-                  navigator.serviceWorker.controller.postMessage({
-                    type: 'ENSURE_DETECTOR',
-                    tabId: tabs[0].id
-                  });
-                }
-                
-                // Still attempt a force scan in case the script is actually there
-                setTimeout(() => {
-                  chrome.tabs.sendMessage(tabs[0].id, { action: 'forceScan', override: true });
-                  
-                  // Hide loading after a reasonable timeout if we don't get a message back
-                  setTimeout(() => {
-                    showLoading(false);
-                  }, 2500);
-                }, 500);
-              } else if (response && response.pong) {
-                // Content script is running, trigger a scan
-                console.log('CA detector is running, triggering scan');
-                chrome.tabs.sendMessage(tabs[0].id, { action: 'forceScan', override: true });
-                
-                // Hide loading after a reasonable timeout if we don't get a message back
-                setTimeout(() => {
-                  showLoading(false);
-                }, 2500);
-              } else {
-                // Strange response, hide loading
-                showLoading(false);
-              }
-            });
-          } catch (error) {
-            console.error('Error triggering CA scan:', error);
-            showLoading(false);
-          }
-        }
-      }
-    });
+    reloadPanelIframe();
   });
   
   // Initialize on load
