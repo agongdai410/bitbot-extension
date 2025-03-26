@@ -747,11 +747,18 @@ function injectDetectorCode() {
     const allVisibleCAs = [...linkCAs, ...textCAs];
     logToPanel(`Total CAs found: ${allVisibleCAs.length} (${linkCAs.length} in links, ${textCAs.length} in text)`);
     
-    // Process the most visible CA from all sources
+    // Process the most visible CA from all sources or notify panel that we're on X.com but no CA was found
     if (allVisibleCAs.length > 0) {
       findMostVisibleCA(allVisibleCAs);
     } else {
-      logToPanel('No visible contract addresses found');
+      // Send message to panel that we're on X but no CA was found
+      // This will allow the panel to load the most recent gmgn.ai page
+      console.log('No CAs found, sending caDetected message with empty contractAddress');
+      chrome.runtime.sendMessage({
+        action: 'caDetected',
+        contractAddress: '',
+        url: window.location.href
+      });
     }
   }
   
@@ -1387,7 +1394,39 @@ function injectDetectorCode() {
       });
       
       logToPanel('Forced scan triggered, searching for CAs from the top');
+      
+      // Variable to track if any CAs were found during the scan
+      let hasFoundCAs = false;
+      
+      // Override the findMostVisibleCA function temporarily to track if CAs were found
+      const originalFindMostVisibleCA = findMostVisibleCA;
+      findMostVisibleCA = function(visibleCAs) {
+        if (visibleCAs && visibleCAs.length > 0) {
+          hasFoundCAs = true;
+        }
+        // Call the original function
+        return originalFindMostVisibleCA(visibleCAs);
+      };
+      
+      // Execute the scan
       scanForContractAddresses();
+      
+      // Restore the original function
+      findMostVisibleCA = originalFindMostVisibleCA;
+      
+      // If no CAs were found and we haven't sent a message from scanForContractAddresses,
+      if (!hasFoundCAs) {
+        setTimeout(() => {
+          // Double-check if a CA was processed during the scan
+          if (!lastProcessedCA) {
+            chrome.runtime.sendMessage({
+              action: 'caDetected',
+              contractAddress: '',
+              url: window.location.href
+            });
+          }
+        }, 100); // Small delay to ensure scanForContractAddresses has finished
+      }
     }
     
     // Return true for async responses
