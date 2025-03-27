@@ -1201,7 +1201,7 @@ function injectDetectorCode() {
   function setupScrollListener() {
     logToPanel('Setting up scroll listener');
     let lastKnownScrollY = window.scrollY;
-    const MIN_SCROLL_THRESHOLD = 20; // Minimum pixels to scroll before triggering handler
+    const MIN_SCROLL_THRESHOLD = 15; // Minimum pixels to scroll before triggering handler
     
     window.addEventListener('scroll', () => {
       const currentScrollY = window.scrollY;

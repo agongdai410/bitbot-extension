@@ -247,6 +247,7 @@ document.addEventListener('DOMContentLoaded', () => {
   // Function to switch to X and search for a token
   async function searchTokenOnX(contractAddress) {
     if (!contractAddress) return;
+    console.error('searchTokenOnX Searching for token on X.com:', contractAddress);
     
     const searchUrl = `https://x.com/search?q=${encodeURIComponent(contractAddress)}`;
     
@@ -265,6 +266,7 @@ document.addEventListener('DOMContentLoaded', () => {
         // Save the current gmgn url to history
         addToHistory(url, 'gmgn');
         
+        console.error('checkForTokenPage calls searchTokenOnX url:', url, 'iframeId', iframeId);
         // Automatically search this token on X
         searchTokenOnX(contractAddress);
         
@@ -280,11 +282,16 @@ document.addEventListener('DOMContentLoaded', () => {
     if (isLoadingInProgress) {
       return;
     }
+
+    console.error('Loading iframe:', url);  
     
     isLoadingInProgress = true;
     showLoading(true);
     showFailedToLoadNotification(false); // Hide failed notification on new load attempt
     showNotification(loadingMessage, false);
+      
+    // Add a MutationObserver to detect browser error pages
+    let errorDetectionObserver;
     
     try {
       // Pre-notify service worker about the upcoming navigation
@@ -298,9 +305,6 @@ document.addEventListener('DOMContentLoaded', () => {
       // Set iframe source
       iframe.src = urlWithCacheBuster;
       console.log(`Setting iframe source for ${iframeId} to: ${urlWithCacheBuster}`);
-      
-      // Add a MutationObserver to detect browser error pages
-      let errorDetectionObserver;
       try {
         errorDetectionObserver = new MutationObserver((mutations) => {
           // Check if browser has injected its error page
@@ -380,15 +384,6 @@ document.addEventListener('DOMContentLoaded', () => {
         showNotification('Showing pmgn.ai', false);
         // Try to bypass Cloudflare
         bypassCloudflare(iframe);
-      }
-      
-      // For gmgn.ai token pages, check if it's a new token
-      if (iframeId === 'gmgn' && url.includes('/token/')) {
-        const token = extractContractAddress(url);
-        if (token) {
-          // Check if it's a token page
-          checkForTokenPage(url, iframeId);
-        }
       }
     } catch (error) {
       console.warn(`Load attempt ${attempt} for ${url} failed:`, error);
