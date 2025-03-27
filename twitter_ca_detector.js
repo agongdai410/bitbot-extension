@@ -795,76 +795,77 @@ function injectDetectorCode() {
       return;
     }
     
-    // Filter candidates based on the scroll direction and current selected CA
-    let eligibleCAs = confirmedVisibleCAs;
-    
+    // Add the last processed CA to the list of visible CAs if it exists
+    // Update its position to the current position, which might have changed after scrolling
     if (lastProcessedCA) {
-      const lastPosition = lastProcessedCA.position;
-      
-      // When scrolling down, only consider CAs below the current one
-      // When scrolling up, only consider CAs above the current one
-      if (scrollDirection === 'down') {
-        eligibleCAs = confirmedVisibleCAs.filter(ca => ca.position > lastPosition);
-        logToPanel(`Scrolling down: filtering to ${eligibleCAs.length} CAs below position ${lastPosition}`);
-        
-        // If no CAs below, always keep the current CA if it's still visible
-        if (eligibleCAs.length === 0) {
-          // Check if the current CA is still visible
-          const currentCA = confirmedVisibleCAs.find(ca => ca.address === lastProcessedCA.address);
-          
-          if (currentCA) {
-            logToPanel('No more CAs below, keeping current selection (bottommost CA)');
-            // Keep the current CA selected
-            return;
-          } else {
-            // Only fall back to all CAs if current CA is completely gone
-            logToPanel('Current CA no longer visible, selecting from all visible CAs');
-            // eligibleCAs = confirmedVisibleCAs;
-          }
-        }
-      } else if (scrollDirection === 'up') {
-        eligibleCAs = confirmedVisibleCAs.filter(ca => ca.position < lastPosition);
-        logToPanel(`Scrolling up: filtering to ${eligibleCAs.length} CAs above position ${lastPosition}`);
-        
-        // If no CAs above, always keep the current CA if it's still visible
-        if (eligibleCAs.length === 0) {
-          // Check if the current CA is still visible
-          const currentCA = confirmedVisibleCAs.find(ca => ca.address === lastProcessedCA.address);
-          
-          if (currentCA) {
-            logToPanel('No more CAs above, keeping current selection (topmost CA)');
-            // Keep the current CA selected
-            return;
-          } else {
-            // Only fall back to all CAs if current CA is completely gone
-            logToPanel('Current CA no longer visible, selecting from all visible CAs');
-            eligibleCAs = confirmedVisibleCAs;
-          }
-        }
-      }
+      const rect = lastProcessedCA.element.getBoundingClientRect();
+      lastProcessedCA.position = rect.top;
     }
-    
-    // If we found eligible CAs, select the best one based on our criteria
+    const sortedCAs = [
+      ...confirmedVisibleCAs, 
+      ...(lastProcessedCA ? [lastProcessedCA] : [])
+    ].sort((a, b) => a.position - b.position);
+
     let caToProcess;
     
-    if (eligibleCAs.length > 0) {
+    // If there's a previously processed CA and it's still visible
+    if (lastProcessedCA) {
+      // Find the current CA in the sorted array (if it exists)
+      const currentCAIndex = sortedCAs.findIndex(ca => ca.address === lastProcessedCA.address);
+      
       if (scrollDirection === 'down') {
-        // When scrolling down, prefer the topmost eligible CA
-        caToProcess = [...eligibleCAs].sort((a, b) => a.position - b.position)[0];
-        logToPanel(`Selected topmost CA while scrolling down: position ${caToProcess.position}`);
+        if (currentCAIndex !== -1) {
+          // When scrolling down, select the next CA in the sorted array (which is below)
+          if (currentCAIndex < sortedCAs.length - 1) {
+            caToProcess = sortedCAs[currentCAIndex + 1];
+            logToPanel(`Found CA immediately below current at index ${currentCAIndex + 1}`);
+          } else {
+            // If current CA is the last one, keep the current selection
+            logToPanel('Current CA is already the bottommost, keeping current selection');
+            return;
+          }
+        } else {
+          // If current CA is no longer visible, select the topmost visible CA
+          caToProcess = sortedCAs[0];
+          logToPanel(`No current CA, selecting topmost at position ${caToProcess.position}`);
+        }
       } else if (scrollDirection === 'up') {
-        // When scrolling up, prefer the bottommost eligible CA
-        caToProcess = [...eligibleCAs].sort((a, b) => b.position - a.position)[0];
-        logToPanel(`Selected bottommost CA while scrolling up: position ${caToProcess.position}`);
+        if (currentCAIndex !== -1) {
+          // When scrolling up, select the previous CA in the sorted array (which is above)
+          if (currentCAIndex > 0) {
+            caToProcess = sortedCAs[currentCAIndex - 1];
+            logToPanel(`Found CA immediately above current at index ${currentCAIndex - 1}`);
+          } else {
+            // If current CA is the first one, keep the current selection
+            logToPanel('Current CA is already the topmost, keeping current selection');
+            return;
+          }
+        } else {
+          // If current CA is no longer visible, select the bottommost visible CA
+          caToProcess = sortedCAs[sortedCAs.length - 1];
+          logToPanel(`No current CA, selecting bottommost at position ${caToProcess.position}`);
+        }
       } else {
         // If not scrolling, use default selection criteria
-        caToProcess = getDefaultCA(eligibleCAs);
+        caToProcess = getDefaultCA(confirmedVisibleCAs);
       }
     } else {
-      // keep current CA selection if no eligible CAs found
-      // caToProcess = getDefaultCA(confirmedVisibleCAs);
+      // No previous CA was processed, select based on scroll direction
+      if (scrollDirection === 'down') {
+        // Select topmost CA
+        caToProcess = sortedCAs[0];
+        logToPanel(`No previous CA, scrolling down: selecting topmost at position ${caToProcess.position}`);
+      } else if (scrollDirection === 'up') {
+        // Select bottommost CA
+        caToProcess = sortedCAs[sortedCAs.length - 1];
+        logToPanel(`No previous CA, scrolling up: selecting bottommost at position ${caToProcess.position}`);
+      } else {
+        // If not scrolling, use default selection criteria
+        caToProcess = getDefaultCA(confirmedVisibleCAs);
+      }
     }
     
+    // Process the selected CA
     processSelectedCA(caToProcess);
   }
   
