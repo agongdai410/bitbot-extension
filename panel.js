@@ -17,6 +17,7 @@ document.addEventListener('DOMContentLoaded', () => {
   const btnForward = document.getElementById('btn-forward');
   const btnSwap = document.getElementById('btn-swap');
   const btnSettings = document.getElementById('btn-settings');
+  const fullScreenMask = document.getElementById('full-screen-mask');
   const iframeX = document.getElementById('iframe-x');
   const iframeGmgn = document.getElementById('iframe-gmgn');
   const loadingIndicator = document.getElementById('loading-indicator');
@@ -596,6 +597,12 @@ document.addEventListener('DOMContentLoaded', () => {
       await loadIframe(iframeGmgn, currentURL, 'Refreshing pmgn.ai', 'gmgn', 1, true);
     }
   }
+
+  const toggleSettingsPopup = () => {
+    const settingsElement = document.getElementById('settings');
+    settingsElement.style.display = settingsElement.style.display === 'block' ? 'none' : 'block';
+    fullScreenMask.style.display = fullScreenMask.style.display === 'block' ? 'none' : 'block';
+  }
   
   // Event Listeners
   btnXIcon.addEventListener('click', () => toggleIframeSource(true));
@@ -608,9 +615,10 @@ document.addEventListener('DOMContentLoaded', () => {
     // Swap content between main browser window and side panel
     await swapWithMainWindow();
   });
-  btnSettings.addEventListener('click', () => {
-    showNotification('Settings feature coming soon', false);
-  });
+  btnSettings.addEventListener('click', toggleSettingsPopup);
+  
+  // Add event listener to document to close settings when clicking outside
+  fullScreenMask.addEventListener('click', toggleSettingsPopup);
   
   // Trade button to open Bitbot in a new tab
   const tradeButton = document.getElementById('trade-button');

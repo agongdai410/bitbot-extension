@@ -11,7 +11,9 @@
       --secondary-color: #14171A;
       --background-color: #212128;
       --text-color: #0B0C0E;
-      --border-color: #E1E8ED;
+      --text-white: #FFFFFF;
+      --text-secondary: rgba(255, 255, 255, 0.6);
+      --border-color: rgba(255, 255, 255, 0.08);
       --error-color: #E0245E;
       --green-color: #83D94F;
       --gray-background: rgba(255, 255, 255, 0.18);
@@ -35,7 +37,7 @@
 
     .text-sm {
       font-size: 14px;
-      color: rgba(255, 255, 255, 0.6);
+      color: var(--text-secondary);
       font-weight: 400;
     }
 
@@ -45,6 +47,65 @@
       position: sticky;
       top: 0;
       z-index: 100;
+    }
+
+    h2 {
+      font-size: 16px;
+      font-weight: 500;
+      margin: 0 0 10px;
+      padding: 0;
+    }
+
+    #settings {
+      display: none;
+      position: absolute;
+      z-index: 20;
+      top: 56px;
+      right: 24px;
+      width: 288px;
+      border-radius: 8px;
+      padding: 24px;
+      background-color: var(--background-color);
+      box-shadow: 0 4px 8px rgba(0, 0, 0, 0.2);
+      color: var(--text-white);
+    }
+
+    #settings .setting-item {
+      margin: 0 0 4px;
+      padding: 16px 0;
+      border-bottom: 1px solid var(--border-color);
+      display: flex;
+      justify-content: space-between;
+      align-items: flex-start;
+    }
+
+    #settings .setting-item-header {
+      display: block;
+      margin: 0 0 4px;
+      font-size: 14px;
+    }
+
+    #settings .setting-item-description {
+      font-size: 12px;
+      color: var(--text-secondary);
+      line-height: 16px;
+    }
+
+    #settings #rate-us {
+      margin: 16px 0 0;
+      text-align: center;
+      font-size: 12px;
+      cursor: pointer;
+    }
+
+    #full-screen-mask {
+      display: none;
+      position: fixed;
+      top: 0;
+      left: 0;
+      right: 0;
+      bottom: 0;
+      z-index: 10;
     }
 
     .button-container {
@@ -275,7 +336,7 @@
   </style>
 </head>
 <body>
-  <div class="header">
+  <header class="header">
     <div class="button-container">
       <div class="left-icons">
         <button id="btn-x-icon" class="icon-button active">
@@ -303,7 +364,36 @@
         </button>
       </div>
     </div>
-  </div>
+    <div id="full-screen-mask"></div>
+    <div id="settings">
+      <h2>Auto-refresh Settings</h2>
+      <div class="setting-item">
+        <label for="x-refresh-enabled">
+          <span class="setting-item-header">On X</span>
+          <div class="setting-item-description">
+            The X page on the secondary browser will auto-fetch the main browser’s token contract address and find top posts linked to it.
+          </div>
+        </label>
+        <div>
+          <input type="checkbox" id="x-refresh-enabled" checked>
+        </div>
+      </div>
+      <div class="setting-item">
+        <label for="gmgn-refresh-enabled">
+          <span class="setting-item-header">On GMGN</span>
+          <div class="setting-item-description">
+            The GMGN page on the secondary browser will auto-fetch the main browser’s token contract address and find the chart linked to it.
+          </div>
+        </label>
+        <div>
+          <input type="checkbox" id="gmgn-refresh-enabled" checked>
+        </div>
+      </div>
+      <div id="rate-us" class="text-sm">
+        Give us 5 stars! ⭐⭐⭐⭐⭐️
+      </div>
+    </div>
+  </header>
 
   <div class="content">
     <!-- Two separate iframes for each site - empty src to avoid initial loading -->
