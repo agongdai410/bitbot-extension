@@ -13,7 +13,6 @@ class TabDetector {
     this.detectorsInjected = false;
     this.lastDetectedCA = null;
     this.detectedCAs = new Set();
-    this.isMonitoring = false;
   }
   
   // Inject the content script into the tab
@@ -32,8 +31,6 @@ class TabDetector {
       this.detectorsInjected = true;
       console.log(`Successfully injected CA detector into tab ${this.tabId}`);
       
-      // Start periodic checker to send status ping to the injected script
-      this.startMonitoring();
     } catch (error) {
       console.error('Error injecting CA detector script:', error);
     }
@@ -64,41 +61,6 @@ class TabDetector {
       }
     }
   }
-  
-  // Start monitoring for new CAs on the page
-  startMonitoring() {
-    if (this.isMonitoring) return;
-    
-    this.isMonitoring = true;
-    console.log(`Starting CA monitoring for tab ${this.tabId}`);
-    
-    // Ping the content script periodically to trigger scans
-    this.monitorInterval = setInterval(async () => {
-      try {
-        // await chrome.tabs.sendMessage(this.tabId, { 
-        //   action: 'checkForCAs',
-        // });
-      } catch (error) {
-        console.warn('Error sending message to content script:', error);
-        // If the content script isn't responding, try to re-inject it
-        if (error.message.includes('receiving end does not exist')) {
-          this.detectorsInjected = false;
-          clearInterval(this.monitorInterval);
-          this.isMonitoring = false;
-          this.inject();
-        }
-      }
-    }, 3000);
-  }
-  
-  // Stop monitoring when tab is not active or closed
-  stopMonitoring() {
-    if (!this.isMonitoring) return;
-    
-    console.log(`Stopping CA monitoring for tab ${this.tabId}`);
-    clearInterval(this.monitorInterval);
-    this.isMonitoring = false;
-  }
 }
 
 // Listen for messages from the injected content script
@@ -127,14 +89,7 @@ chrome.runtime.onMessage.addListener((message, sender, sendResponse) => {
 // Monitor tab changes and inject detector when on Twitter/X
 chrome.tabs.onActivated.addListener(async (activeInfo) => {
   activeTabId = activeInfo.tabId;
-  await checkAndInjectScript(activeTabId);
-  
-  // Force a scan when switching to a Twitter tab
-  if (detector && detector.detectorsInjected) {
-    setTimeout(() => {
-      detector.forceScan();
-    }, 500);
-  }
+  enforceScanWhenTabUpdated();
 });
 
 // Also monitor for URL changes in the active tab
@@ -144,22 +99,11 @@ chrome.tabs.onUpdated.addListener(async (tabId, changeInfo, tab) => {
     if (changeInfo.status === 'loading') {
       console.log('Twitter page is loading, preparing detector...');
       // Make sure detector is ready
-      if (!detector || detector.tabId !== tabId) {
-        detector = new TabDetector(tabId);
-      }
+      detector = new TabDetector(tabId);
     }
     
     if (changeInfo.status === 'complete') {
-      console.log('Twitter page load complete, injecting and scanning...');
-      await checkAndInjectScript(tabId);
-      
-      // Force an immediate scan after page load completes
-      if (detector && detector.detectorsInjected) {
-        setTimeout(() => {
-          console.log('Triggering immediate scan after page load');
-          chrome.tabs.sendMessage(tabId, { action: 'forceScan' });
-        }, 1000); // Short delay to let the page render
-      }
+      enforceScanWhenTabUpdated();
     }
   }
 });
@@ -179,8 +123,6 @@ async function checkAndInjectScript(tabId) {
       }
       
       await detector.inject();
-    } else if (detector) {
-      detector.stopMonitoring();
     }
   } catch (error) {
     console.error('Error checking tab:', error);
@@ -216,10 +158,6 @@ async function initialize() {
       console.log('Side panel became visible, refreshing detector...');
       await enforceScanWhenTabUpdated();
     }
-  });
-
-  chrome.tabs.onActivated.addListener(() => {
-    enforceScanWhenTabUpdated();
   });
 }
 
@@ -1267,79 +1205,6 @@ function injectDetectorCode() {
     });
   }
   
-  // Set up mutation observer to detect dynamic content changes
-  function setupMutationObserver() {
-    logToPanel('Setting up mutation observer');
-    
-    // Add tracking for significant mutations
-    let significantChangeCount = 0;
-    let lastMutationTime = 0;
-    const MUTATION_COOLDOWN = 5000; // 5 seconds minimum between scans
-    
-    const observer = new MutationObserver(mutations => {
-      // Skip observations if we're in cooldown
-      const now = Date.now();
-      if (now - lastMutationTime < MUTATION_COOLDOWN) {
-        return;
-      }
-      
-      // Only count significant mutations that could contain CAs
-      let newSignificantChanges = 0;
-      
-      // Look for significant DOM changes that might contain new CAs
-      for (const mutation of mutations) {
-        if (mutation.type === 'childList' && mutation.addedNodes.length > 0) {
-          for (const node of mutation.addedNodes) {
-            // Only count elements that might contain CAs (divs with substantial content)
-            if (node.nodeType === Node.ELEMENT_NODE && 
-                (node.tagName === 'DIV' || node.tagName === 'ARTICLE') &&
-                node.textContent && node.textContent.length > 100) {
-              
-              newSignificantChanges++;
-              
-              // Stop counting after a reasonable threshold
-              if (newSignificantChanges >= 3) {
-                break;
-              }
-            }
-          }
-        }
-        
-        if (newSignificantChanges >= 3) break;
-      }
-      
-      // Accumulate significant changes
-      significantChangeCount += newSignificantChanges;
-      
-      // Only trigger a scan after multiple significant changes (like a new tweet loading)
-      // and when not scrolling and not in CA selection cooldown
-      if (significantChangeCount >= 5 && !isScrolling) {
-        // Reset counter
-        significantChangeCount = 0;
-        lastMutationTime = now;
-        
-        // Check for CA selection cooldown
-        const cooldownRemaining = CA_SELECTION_COOLDOWN - (now - lastCASelectionTime);
-        if (cooldownRemaining > 0) {
-          return; // Skip scanning during cooldown
-        }
-        
-        // Debounce the scan
-        setTimeout(() => {
-          logToPanel('Significant DOM changes detected, scanning for new CAs...');
-          scanForContractAddresses();
-        }, 1000);
-      }
-    });
-    
-    // Start observing the document body for DOM changes
-    observer.observe(document.body, {
-      childList: true,
-      subtree: true,
-      characterData: false // Don't observe text changes, only structure
-    });
-  }
-  
   // Listen for messages from the panel script
   chrome.runtime.onMessage.addListener((message, sender, sendResponse) => {
     if (message.action === 'checkForCAs') {
@@ -1441,7 +1306,6 @@ function injectDetectorCode() {
     
     // Set up event listeners
     setupScrollListener();
-    // setupMutationObserver();
   }
   
   // Run initialization

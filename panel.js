@@ -1,14 +1,13 @@
-function isXOrTwitterUrl(url) {
-  return !!url && (url.startsWith('https://x.com') || url.startsWith('https://twitter.com'));
-}
-
-function isGmgnUrl(url) {
-  return !!url && url.startsWith('https://gmgn.ai');
-}
-
-
 // Wait for DOM to be fully loaded before accessing any elements
 document.addEventListener('DOMContentLoaded', () => {
+  function isXOrTwitterUrl(url) {
+    return !!url && (url.startsWith('https://x.com') || url.startsWith('https://twitter.com'));
+  }
+  
+  function isGmgnUrl(url) {
+    return !!url && url.startsWith('https://gmgn.ai');
+  }
+  
   // Get DOM elements
   const btnRefresh = document.getElementById('btn-refresh');
   const btnRetry = document.getElementById('retry-button');
@@ -835,23 +834,21 @@ document.addEventListener('DOMContentLoaded', () => {
   
   // Initialize swap button state
   updateSwapButtonState();
-  
-  // Monitor tab URL changes to update swap button state and handle token navigation
-  chrome.tabs.onUpdated.addListener((tabId, changeInfo, tab) => {
-    if (changeInfo.status === 'complete') {
-      // Only update if it's the active tab
-      chrome.tabs.query({active: true, currentWindow: true}, (tabs) => {
-        if (tabs && tabs.length > 0 && tabs[0].id === tabId) {
-          // Update swap button state
-          // reloadPanelIframe();
-        }
-      });
-    }
-  });
+
+  let activeTabId = null;
   
   // Monitor tab activation changes
-  chrome.tabs.onActivated.addListener(() => {
+  chrome.tabs.onActivated.addListener(({ tabId }) => {
+    activeTabId = tabId;
     reloadPanelIframe();
+  });
+  
+  // Listen for tab updates (refresh and URL changes)
+  chrome.tabs.onUpdated.addListener((tabId, changeInfo, tab) => {
+    if (tabId === activeTabId && changeInfo.status === 'complete') {
+      // Only update if it's the active tab
+      reloadPanelIframe();
+    }
   });
   
   // Initialize on load
