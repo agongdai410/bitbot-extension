@@ -180,18 +180,18 @@ self.addEventListener('message', async (event) => {
       }
     }
   }
-  else if (event.data && event.data.type === 'CA_DETECTED') {
-    console.log('Service worker received CA_DETECTED message:', event.data);
+  else if (event.data && event.data.type === 'CA_DETECTED_ON_X') {
+    console.log('Service worker received CA_DETECTED_ON_X message:', event.data);
     
     try {
       // Forward the message to all panel clients
       const matchedClients = await clients.matchAll({ type: 'window' });
-      console.log(`Found ${matchedClients.length} clients to forward CA_DETECTED message to`);
+      console.log(`Found ${matchedClients.length} clients to forward CA_DETECTED_ON_X message to`);
       
       for (const client of matchedClients) {
         console.log('Forwarding CA message to client:', client.url);
         client.postMessage({
-          type: 'CA_DETECTED',
+          type: 'CA_DETECTED_ON_X',
           contractAddress: event.data.contractAddress,
           sourceUrl: event.data.url
         });
@@ -202,7 +202,7 @@ self.addEventListener('message', async (event) => {
         event.ports[0].postMessage({ success: true });
       }
     } catch (error) {
-      console.error('Error forwarding CA_DETECTED message:', error);
+      console.error('Error forwarding CA_DETECTED_ON_X message:', error);
     }
   }
 });
@@ -211,7 +211,7 @@ self.addEventListener('message', async (event) => {
 chrome.runtime.onMessage.addListener((message, sender, sendResponse) => {
   console.log('Service worker received runtime message:', message);
   
-  if (message && message.type === 'CA_DETECTED') {
+  if (message && message.type === 'CA_DETECTED_ON_X') {
     console.log('Runtime message about CA detection:', message);
     
     // Process the message
@@ -220,7 +220,7 @@ chrome.runtime.onMessage.addListener((message, sender, sendResponse) => {
       
       matchedClients.forEach((client) => {
         client.postMessage({
-          type: 'CA_DETECTED',
+          type: 'CA_DETECTED_ON_X',
           contractAddress: message.contractAddress,
           sourceUrl: message.url
         });
@@ -1076,7 +1076,7 @@ async function notifyClientsAboutToken(tokenAddress, gmgnUrl) {
   
   clientList.forEach(client => {
     client.postMessage({
-      type: 'TOKEN_DETECTED',
+      type: 'CA_DETECTED_ON_GMGN_URL',
       tokenAddress: tokenAddress,
       gmgnUrl: gmgnUrl
     });

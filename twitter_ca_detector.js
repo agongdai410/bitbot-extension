@@ -108,7 +108,7 @@ chrome.runtime.onMessage.addListener((message, sender, sendResponse) => {
     
     // Forward to the service worker
     chrome.runtime.sendMessage({
-      type: 'CA_DETECTED',
+      type: 'CA_DETECTED_ON_X',
       contractAddress: message.contractAddress,
       url: sender.tab.url
     });

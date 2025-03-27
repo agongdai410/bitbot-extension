@@ -689,7 +689,7 @@ document.addEventListener('DOMContentLoaded', () => {
       const targetIframe = event.data.iframeId === 'x' ? iframeX : iframeGmgn;
       bypassCloudflare(targetIframe);
     }
-    else if (event.data.type === 'TOKEN_DETECTED') {
+    else if (event.data.type === 'CA_DETECTED_ON_GMGN_URL') {
       console.log('Token detected in main browser:', event.data.gmgnUrl);
       const tokenAddress = extractContractAddress(event.data.gmgnUrl);
       
@@ -702,7 +702,7 @@ document.addEventListener('DOMContentLoaded', () => {
       // Show notification
       showNotification(`Searching for ${event.data.tokenAddress.slice(0, 8)}... on X`, false);
     }
-    else if (event.data.type === 'CA_DETECTED') {
+    else if (event.data.type === 'CA_DETECTED_ON_X') {
       const tabs = await chrome.tabs.query({active: true, currentWindow: true});
       // whenever we detect a CA, we need to check current tab is X or Twitter
       if (tabs && tabs.length > 0) {
