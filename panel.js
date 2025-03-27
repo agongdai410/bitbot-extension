@@ -1,3 +1,12 @@
+function isXOrTwitterUrl(url) {
+  return !!url && (url.startsWith('https://x.com') || url.startsWith('https://twitter.com'));
+}
+
+function isGmgnUrl(url) {
+  return !!url && url.startsWith('https://gmgn.ai');
+}
+
+
 // Wait for DOM to be fully loaded before accessing any elements
 document.addEventListener('DOMContentLoaded', () => {
   // Get DOM elements
@@ -247,43 +256,27 @@ document.addEventListener('DOMContentLoaded', () => {
   // Function to switch to X and search for a token
   async function searchTokenOnX(contractAddress) {
     if (!contractAddress) return;
-    console.error('searchTokenOnX Searching for token on X.com:', contractAddress);
-    
+
     const searchUrl = `https://x.com/search?q=${encodeURIComponent(contractAddress)}`;
-    
+    switchIframeTo('x');
     // Load the search URL
     await loadIframe(iframeX, searchUrl, `Searching for token on X.com`, 'x');
     addToHistory(searchUrl, 'x');
-    
-    switchIframeTo('x');
-  }
-  
-  // Function to check if current URL is a token page and automatically search on X
-  function checkForTokenPage(url, iframeId) {
-    if (iframeId === 'gmgn' && url.includes('/token/')) {
-      const contractAddress = extractContractAddress(url);
-      if (contractAddress) {
-        // Save the current gmgn url to history
-        addToHistory(url, 'gmgn');
-        
-        console.error('checkForTokenPage calls searchTokenOnX url:', url, 'iframeId', iframeId);
-        // Automatically search this token on X
-        searchTokenOnX(contractAddress);
-        
-        // Show a brief notification about the automatic search
-        showNotification(`Searching for ${contractAddress.slice(0, 8)}... on X`, false);
-      }
-    }
   }
   
   // Function to load an iframe
-  async function loadIframe(iframe, url, loadingMessage, iframeId, attempt = 1) {
+  async function loadIframe(iframe, url, loadingMessage, iframeId, attempt = 1, enforceReload = false) {
     // Prevent multiple loads at once
     if (isLoadingInProgress) {
       return;
     }
 
-    console.error('Loading iframe:', url);  
+    if (!enforceReload && currentActiveIframe === iframeId && iframe.src.includes(url)) {
+      console.log('loadIframe Skipping load of already loaded iframe:', url);
+      return;
+    }
+
+    console.log('Loading iframe:', url);
     
     isLoadingInProgress = true;
     showLoading(true);
@@ -378,9 +371,9 @@ document.addEventListener('DOMContentLoaded', () => {
       isLoadingInProgress = false;
       
       // Apply appropriate handler based on loaded URL
-      if (url.includes('x.com')) {
+      if (isXOrTwitterUrl(url)) {
         showNotification('Showing X.com', false);
-      } else if (url.includes('gmgn.ai')) {
+      } else if (isGmgnUrl(url)) {
         showNotification('Showing pmgn.ai', false);
         // Try to bypass Cloudflare
         bypassCloudflare(iframe);
@@ -417,7 +410,7 @@ document.addEventListener('DOMContentLoaded', () => {
       } else {
         // Max retries reached, show error
         console.error(`Failed to load ${url} after ${MAX_RETRIES} attempts`);
-        showNotification(`Failed to load ${url.includes('x.com') ? 'X.com' : 'pmgn.ai'}`, true);
+        showNotification(`Failed to load ${isXOrTwitterUrl(url) ? 'X.com' : 'pmgn.ai'}`, true);
         showLoading(false);
         showFailedToLoadNotification(true); // Show failed notification after max retries
         isLoadingInProgress = false;
@@ -596,12 +589,12 @@ document.addEventListener('DOMContentLoaded', () => {
       // Get current URL from history or default to home
       const history = xHistory;
       const currentURL = history.urls[history.current] || X_URL;
-      await loadIframe(iframeX, currentURL, 'Refreshing X.com', 'x');
+      await loadIframe(iframeX, currentURL, 'Refreshing X.com', 'x', 1, true);
     } else {
       // Get current URL from history or default to home
       const history = gmgnHistory;
       const currentURL = history.urls[history.current] || GMGN_URL;
-      await loadIframe(iframeGmgn, currentURL, 'Refreshing pmgn.ai', 'gmgn');
+      await loadIframe(iframeGmgn, currentURL, 'Refreshing pmgn.ai', 'gmgn', 1, true);
     }
   }
   
@@ -649,9 +642,9 @@ document.addEventListener('DOMContentLoaded', () => {
       let panelToLoad = 'unchanged';
       if (tabs && tabs.length > 0) {
         const currentTab = tabs[0];
-        if (currentTab.url && (currentTab.url.includes('x.com') || currentTab.url.includes('twitter.com'))) {
+        if (isXOrTwitterUrl(currentTab.url)) {
           panelToLoad = 'gmgn';
-        } else if (currentTab.url && currentTab.url.includes('gmgn.ai')) {
+        } else if (isGmgnUrl(currentTab.url)) {
           panelToLoad = 'x';
         }
       }
@@ -688,7 +681,7 @@ document.addEventListener('DOMContentLoaded', () => {
   }
   
   // Set up service worker message listener
-  navigator.serviceWorker.addEventListener('message', (event) => {
+  navigator.serviceWorker.addEventListener('message', async (event) => {
     console.log('Received message from service worker:', event.data);
     
     if (event.data.type === 'BYPASS_CLOUDFLARE') {
@@ -710,6 +703,17 @@ document.addEventListener('DOMContentLoaded', () => {
       showNotification(`Searching for ${event.data.tokenAddress.slice(0, 8)}... on X`, false);
     }
     else if (event.data.type === 'CA_DETECTED') {
+      const tabs = await chrome.tabs.query({active: true, currentWindow: true});
+      // whenever we detect a CA, we need to check current tab is X or Twitter
+      if (tabs && tabs.length > 0) {
+        const currentTab = tabs[0];
+        if (!isXOrTwitterUrl(currentTab.url)) {
+          return;
+        }
+      } else {
+        return;
+      }
+
       console.log('Contract address detected on X.com:', event.data.contractAddress);
       
       const newCa = event.data.contractAddress || '';
@@ -719,7 +723,7 @@ document.addEventListener('DOMContentLoaded', () => {
       // Always process newly detected CAs from scrolling, even if they were seen before
       // Just check if it's the same as the currently displayed one
       const currentGmgnUrl = iframeGmgn.src;
-      const isShowingThisCA = newCa ? currentGmgnUrl.includes(newCa) : !currentGmgnUrl.includes('/token/');
+      const isShowingThisCA = newCa ? currentGmgnUrl.includes(newCa) : currentActiveIframe === 'gmgn';
       
       // If the CA is not the same as the currently displayed one, or if it's not a gmgn.ai page, switch to the new CA
       if (!isShowingThisCA || (currentActiveIframe === 'x')) {
@@ -771,14 +775,11 @@ document.addEventListener('DOMContentLoaded', () => {
       }
 
       const currentTab = tabs[0];
-      console.log('Current tab URL:', currentTab.url);
       
       if (currentTab.url && currentTab.url.includes('gmgn.ai') && currentTab.url.includes('/token/')) {
         // Extract token address
         const tokenAddress = extractContractAddress(currentTab.url);
         if (tokenAddress) {
-          console.log('Found token in active tab:', tokenAddress);
-          
           // Save the gmgn.ai URL to history
           addToHistory(currentTab.url, 'gmgn');
           searchTokenOnX(tokenAddress);
@@ -790,7 +791,7 @@ document.addEventListener('DOMContentLoaded', () => {
       }
 
       // if we're on X or Twitter, this is handled by twitter_ca_detector.js
-      if (currentTab.url && (currentTab.url.includes('x.com') || currentTab.url.includes('twitter.com'))) {
+      if (isXOrTwitterUrl(currentTab.url)) {
         return;
       }
 
@@ -892,8 +893,8 @@ document.addEventListener('DOMContentLoaded', () => {
       showNotification('Swapped content with main window', false);
       
       // Load main window URL in the appropriate iframe based on domain
-      const isXUrl = mainWindowUrl.includes('x.com') || mainWindowUrl.includes('twitter.com');
-      const isGmgnUrl = mainWindowUrl.includes('gmgn.ai');
+      const isXUrl = isXOrTwitterUrl(mainWindowUrl);
+      const isGmgnUrl = isGmgnUrl(mainWindowUrl);
       
       if (isXUrl) {
         // Switch to X iframe if needed
@@ -950,8 +951,8 @@ document.addEventListener('DOMContentLoaded', () => {
       const mainWindowUrl = currentTab.url;
       
       // Check if main window has either x.com or gmgn.ai content
-      const isMainWindowX = mainWindowUrl && (mainWindowUrl.includes('x.com') || mainWindowUrl.includes('twitter.com'));
-      const isMainWindowGmgn = mainWindowUrl && mainWindowUrl.includes('gmgn.ai');
+      const isMainWindowX = isXOrTwitterUrl(mainWindowUrl);
+      const isMainWindowGmgn = isGmgnUrl(mainWindowUrl);
       
       // Get current panel content
       const isPanelX = currentActiveIframe === 'x';
