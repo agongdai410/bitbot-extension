@@ -95,7 +95,7 @@ chrome.tabs.onActivated.addListener(async (activeInfo) => {
 // Also monitor for URL changes in the active tab
 chrome.tabs.onUpdated.addListener(async (tabId, changeInfo, tab) => {
   // Trigger on both 'loading' and 'complete' to catch all navigation events
-  if (tabId === activeTabId && tab.url && (tab.url.includes('twitter.com') || tab.url.includes('x.com'))) {
+  if (tabId === activeTabId && apmUtils.isXOrTwitterUrl(tab.url)) {
     if (changeInfo.status === 'loading') {
       console.log('Twitter page is loading, preparing detector...');
       // Make sure detector is ready
@@ -112,7 +112,7 @@ chrome.tabs.onUpdated.addListener(async (tabId, changeInfo, tab) => {
 async function checkAndInjectScript(tabId) {
   try {
     const tab = await chrome.tabs.get(tabId);
-    isTwitterTab = tab.url && (tab.url.includes('twitter.com') || tab.url.includes('x.com'));
+    isTwitterTab = apmUtils.isXOrTwitterUrl(tab.url);
     
     if (isTwitterTab) {
       console.log('Detected Twitter/X.com tab:', tab.url);

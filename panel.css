@@ -1,0 +1,431 @@
+/* Font imports */
+@font-face {
+  font-family: 'Roboto Mono';
+  src: url('fonts/RobotoMono-Bold.ttf') format('truetype');
+  font-weight: 700;
+  font-style: normal;
+  font-display: swap;
+}
+  
+@font-face {
+  font-family: 'IBM Plex Sans';
+  src: url('fonts/IBMPlexSans-Regular.ttf') format('truetype');
+  font-weight: 400;
+  font-style: normal;
+  font-display: swap;
+}
+
+@font-face {
+  font-family: 'IBM Plex Sans';
+  src: url('fonts/IBMPlexSans-Medium.ttf') format('truetype');
+  font-weight: 500;
+  font-style: normal;
+  font-display: swap;
+}
+
+/* Utility class for monospace text */
+.monospace {
+  font-family: 'Roboto Mono', monospace;
+  font-weight: 700;
+}
+
+/* Utility class for medium weight text */
+.medium-weight {
+  font-weight: 500;
+}
+
+:root {
+  --primary-color: #FFCD00;
+  --secondary-color: #14171A;
+  --background-color: #212128;
+  --text-color: #0B0C0E;
+  --text-white: #FFFFFF;
+  --text-secondary: rgba(255, 255, 255, 0.6);
+  --border-color: rgba(255, 255, 255, 0.08);
+  --error-color: #E0245E;
+  --green-color: #83D94F;
+  --gray-background: rgba(255, 255, 255, 0.18);
+}
+
+body {
+  margin: 0;
+  padding: 0;
+  font-family: 'IBM Plex Sans', -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, Helvetica, Arial, sans-serif;
+  background-color: var(--background-color);
+  color: var(--text-color);
+  display: flex;
+  flex-direction: column;
+  height: 100vh;
+  overflow: hidden;
+}
+
+p {
+  margin: 5px 0;
+}
+
+.text-sm {
+  font-size: 14px;
+  color: var(--text-secondary);
+  font-weight: 400;
+}
+
+.header {
+  padding: 9px 12px;
+  background-color: var(--background-color);
+  position: sticky;
+  top: 0;
+  z-index: 100;
+}
+
+h2 {
+  font-size: 16px;
+  font-weight: 500;
+  margin: 0 0 10px;
+  padding: 0;
+}
+
+#settings {
+  position: absolute;
+  z-index: 20;
+  top: 56px;
+  right: 24px;
+  width: 288px;
+  border-radius: 8px;
+  padding: 24px;
+  background-color: var(--background-color);
+  box-shadow: 0 6px 16px rgba(0, 0, 0, 0.3), 0 1px 3px rgba(0, 0, 0, 0.2);
+  color: var(--text-white);
+  border: 1px solid rgba(255, 255, 255, 0.06);
+  opacity: 0;
+  visibility: hidden;
+  transition: opacity 0.2s ease, visibility 0.2s ease;
+}
+
+#settings.visible {
+  opacity: 1;
+  visibility: visible;
+}
+
+#settings .setting-item {
+  margin: 0 0 4px;
+  padding: 16px 0;
+  border-bottom: 1px solid var(--border-color);
+  display: flex;
+  justify-content: space-between;
+  align-items: flex-start;
+}
+
+#settings .setting-item > div {
+  margin-top: 2px;
+  padding-left: 10px;
+  flex-shrink: 0;
+}
+
+/* Custom checkbox toggle styling */
+#settings input[type="checkbox"] {
+  height: 0;
+  width: 0;
+  visibility: hidden;
+  position: absolute;
+}
+
+#settings .toggle-switch {
+  display: inline-block;
+  cursor: pointer;
+  width: 36px;
+  height: 20px;
+  background: #5E636E;
+  border-radius: 10px;
+  position: relative;
+  transition: 0.2s ease;
+  box-shadow: inset 0 1px 3px rgba(0, 0, 0, 0.2);
+}
+
+#settings .toggle-switch:after {
+  content: '';
+  position: absolute;
+  top: 2px;
+  left: 2px;
+  width: 16px;
+  height: 16px;
+  background: #fff;
+  border-radius: 8px;
+  transition: 0.2s ease;
+  box-shadow: 0 1px 3px rgba(0, 0, 0, 0.2);
+}
+
+#settings input:checked + .toggle-switch {
+  background: #64DE30;
+}
+
+#settings input:checked + .toggle-switch:after {
+  left: calc(100% - 2px);
+  transform: translateX(-100%);
+}
+
+#settings .toggle-switch:active:after {
+  width: 20px;
+}
+
+#settings .setting-item-header {
+  display: block;
+  margin: 0 0 4px;
+  font-size: 14px;
+}
+
+#settings .setting-item-description {
+  font-size: 12px;
+  color: var(--text-secondary);
+  line-height: 16px;
+}
+
+#settings #rate-us {
+  margin: 16px 0 0;
+  text-align: center;
+  font-size: 12px;
+  cursor: pointer;
+}
+
+#full-screen-mask {
+  position: fixed;
+  top: 0;
+  left: 0;
+  right: 0;
+  bottom: 0;
+  z-index: 10;
+  opacity: 0;
+  visibility: hidden;
+  background-color: rgba(0, 0, 0, 0.5);
+  transition: opacity 0.2s ease, visibility 0.2s ease;
+}
+
+#full-screen-mask.visible {
+  opacity: 1;
+  visibility: visible;
+}
+
+.button-container {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  padding: 0;
+}
+
+.left-icons {
+  display: flex;
+  align-items: center;
+  gap: 4px;
+}
+
+.right-icons {
+  display: flex;
+  align-items: center;
+  gap: 4px;
+}
+
+.icon-button {
+  background: none;
+  border: none;
+  cursor: pointer;
+  padding: 5px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  border-radius: 50%;
+  transition: background-color 0.2s;
+}
+
+.icon-button:hover {
+  background-color: rgba(255, 255, 255, 0.1);
+}
+
+.icon-button img {
+  width: 20px;
+  height: 20px;
+}
+
+.icon-button.active {
+  background-color: rgba(255, 255, 255, 0.2);
+}
+
+.content {
+  flex: 1;
+  position: relative;
+  overflow: hidden;
+  padding: 4px;
+}
+
+#failed-to-load-notification {
+  position: absolute;
+  z-index: 10;
+  top: 0;
+  left: 0;
+  width: 100%;
+  height: 100%;
+  display: flex;
+  flex-direction: column;
+  justify-content: center;
+  align-items: center;
+  background-color: #000000;
+  color: white;
+  text-align: center;
+  font-size: 16px;
+  display: none;
+}
+
+#failed-to-load-notification .failed-text {
+  margin: 20px;
+}
+
+#failed-to-load-notification #retry-button {
+  background-color: var(--gray-background);
+  border: none;
+  border-radius: 8px;
+  width: 160px;
+  height: 36px;
+  font-weight: 500;
+  font-size: 16px;
+  cursor: pointer;
+  line-height: 36px;
+  color: white;
+}
+
+iframe {
+  width: 100%;
+  height: 100%;
+  border: none;
+  /* Mobile viewport simulation */
+  max-width: 100%;
+  margin: 0 auto;
+  display: none;
+  border-radius: 14px;
+}
+
+iframe.active {
+  display: block;
+}
+
+.loading-indicator {
+  position: fixed;
+  top: 0;
+  left: 0;
+  width: 100%;
+  height: 100%;
+  display: flex;
+  flex-direction: column;
+  justify-content: center;
+  align-items: center;
+  background-color: rgba(255, 255, 255, 0.9);
+  z-index: 1000;
+}
+
+.loading-content {
+  display: flex;
+  flex-direction: column;
+  justify-content: center;
+  align-items: center;
+  text-align: center;
+  position: relative;
+  top: 35%;
+  transform: translateY(0);
+}
+
+.loading-spinner {
+  width: 40px;
+  height: 40px;
+  border: 4px solid #f3f3f3;
+  border-top: 4px solid var(--primary-color);
+  border-radius: 50%;
+  animation: spin 1s linear infinite;
+  margin-bottom: 16px;
+}
+
+.loading-text {
+  margin: 0;
+  padding: 0;
+  text-align: center;
+  font-size: 16px;
+  color: var(--text-color);
+}
+
+@keyframes spin {
+  0% { transform: rotate(0deg); }
+  100% { transform: rotate(360deg); }
+}
+
+#notification {
+  position: fixed;
+  top: 10px;
+  left: 50%;
+  transform: translateX(-50%);
+  background-color: #333;
+  color: white;
+  padding: 10px 20px;
+  border-radius: 5px;
+  z-index: 1000;
+  opacity: 0;
+  transition: opacity 0.3s;
+}
+
+#token-search-notification {
+  position: fixed;
+  bottom: 60px;
+  left: 50%;
+  transform: translateX(-50%);
+  background-color: #333;
+  color: white;
+  padding: 10px 20px;
+  border-radius: 5px;
+  z-index: 1000;
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  box-shadow: 0 4px 8px rgba(0, 0, 0, 0.2);
+}
+
+#token-search-notification button {
+  background-color: #1DA1F2;
+  color: white;
+  border: none;
+  border-radius: 3px;
+  padding: 5px 10px;
+  cursor: pointer;
+}
+
+#token-search-notification .close-button {
+  background-color: transparent;
+  color: white;
+  border: none;
+  cursor: pointer;
+  font-size: 16px;
+  padding: 0 5px;
+}
+
+#version-info {
+  font-size: 12px;
+  margin-left: 10px;
+  position: relative;
+  bottom: 10px;
+  color: #fff;
+}
+
+.footer {
+  margin: 8px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  gap: 48px;
+}
+
+#trade-button {
+  background: linear-gradient(180deg, #454545 0%, #232323 100%);
+  color: var(--primary-color);
+  border: 1px solid #1A1A1A;
+  border-radius: 8px;
+  cursor: pointer;
+  height: 44px;
+  line-height: 1;
+  flex: 1;
+  font-size: 16px;
+  box-shadow: 0px -4px 0px 0px #121212 inset;
+}

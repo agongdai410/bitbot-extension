@@ -1,13 +1,5 @@
 // Wait for DOM to be fully loaded before accessing any elements
 document.addEventListener('DOMContentLoaded', () => {
-  function isXOrTwitterUrl(url) {
-    return !!url && (url.startsWith('https://x.com') || url.startsWith('https://twitter.com'));
-  }
-  
-  function isGmgnUrl(url) {
-    return !!url && url.startsWith('https://gmgn.ai');
-  }
-  
   // Get DOM elements
   const btnRefresh = document.getElementById('btn-refresh');
   const btnRetry = document.getElementById('retry-button');
@@ -33,33 +25,11 @@ document.addEventListener('DOMContentLoaded', () => {
   // Track current active iframe
   let currentActiveIframe = 'x';
   // Track history for each iframe - initialize from localStorage if available
-  let xHistory = loadHistoryFromLocalStorage('x') || { current: -1, urls: [] };
-  let gmgnHistory = loadHistoryFromLocalStorage('gmgn') || { current: -1, urls: [] };
+  let xHistory = apmUtils.loadFromLocalStorage('x_history', { current: -1, urls: [] });
+  let gmgnHistory = apmUtils.loadFromLocalStorage('gmgn_history', { current: -1, urls: [] });
   // Max history size
   const MAX_HISTORY_SIZE = 100;
   
-  // Function to load history from localStorage
-  function loadHistoryFromLocalStorage(iframeId) {
-    try {
-      const savedHistory = localStorage.getItem(`${iframeId}_history`);
-      if (savedHistory) {
-        return JSON.parse(savedHistory);
-      }
-    } catch (e) {
-      console.error(`Error loading ${iframeId} history from localStorage:`, e);
-    }
-    return null;
-  }
-  
-  // Function to save history to localStorage
-  function saveHistoryToLocalStorage(iframeId, history) {
-    try {
-      localStorage.setItem(`${iframeId}_history`, JSON.stringify(history));
-    } catch (e) {
-      console.error(`Error saving ${iframeId} history to localStorage:`, e);
-    }
-  }
-
   /**
    * Switch to the specified iframe, set global variables and update UI
    * @param {'x' | 'gmgn'} iframeId 
@@ -161,7 +131,7 @@ document.addEventListener('DOMContentLoaded', () => {
     }
     
     // Save to localStorage
-    saveHistoryToLocalStorage(iframeId, history);
+    apmUtils.saveToLocalStorage(`${iframeId}_history`, history);
     
     // Update navigation buttons
     updateNavigationState();
@@ -180,7 +150,7 @@ document.addEventListener('DOMContentLoaded', () => {
       await loadIframe(iframe, url, `Loading previous page`, currentActiveIframe);
       
       // Save updated history position
-      saveHistoryToLocalStorage(currentActiveIframe, history);
+      apmUtils.saveToLocalStorage(`${currentActiveIframe}_history`, history);
       
       updateNavigationState();
     }
@@ -199,7 +169,7 @@ document.addEventListener('DOMContentLoaded', () => {
       await loadIframe(iframe, url, `Loading next page`, currentActiveIframe);
       
       // Save updated history position
-      saveHistoryToLocalStorage(currentActiveIframe, history);
+      apmUtils.saveToLocalStorage(`${currentActiveIframe}_history`, history);
       
       updateNavigationState();
     }
@@ -371,9 +341,9 @@ document.addEventListener('DOMContentLoaded', () => {
       isLoadingInProgress = false;
       
       // Apply appropriate handler based on loaded URL
-      if (isXOrTwitterUrl(url)) {
+      if (apmUtils.isXOrTwitterUrl(url)) {
         showNotification('Showing X.com', false);
-      } else if (isGmgnUrl(url)) {
+      } else if (apmUtils.isGmgnUrl(url)) {
         showNotification('Showing pmgn.ai', false);
         // Try to bypass Cloudflare
         bypassCloudflare(iframe);
@@ -410,7 +380,7 @@ document.addEventListener('DOMContentLoaded', () => {
       } else {
         // Max retries reached, show error
         console.error(`Failed to load ${url} after ${MAX_RETRIES} attempts`);
-        showNotification(`Failed to load ${isXOrTwitterUrl(url) ? 'X.com' : 'pmgn.ai'}`, true);
+        showNotification(`Failed to load ${apmUtils.isXOrTwitterUrl(url) ? 'X.com' : 'pmgn.ai'}`, true);
         showLoading(false);
         showFailedToLoadNotification(true); // Show failed notification after max retries
         isLoadingInProgress = false;
@@ -600,8 +570,13 @@ document.addEventListener('DOMContentLoaded', () => {
 
   const toggleSettingsPopup = () => {
     const settingsElement = document.getElementById('settings');
-    settingsElement.style.display = settingsElement.style.display === 'block' ? 'none' : 'block';
-    fullScreenMask.style.display = fullScreenMask.style.display === 'block' ? 'none' : 'block';
+    if (settingsElement.classList.contains('visible')) {
+      settingsElement.classList.remove('visible');
+      fullScreenMask.classList.remove('visible');
+    } else {
+      settingsElement.classList.add('visible');
+      fullScreenMask.classList.add('visible');
+    }
   }
   
   // Event Listeners
@@ -649,9 +624,9 @@ document.addEventListener('DOMContentLoaded', () => {
       let panelToLoad = 'unchanged';
       if (tabs && tabs.length > 0) {
         const currentTab = tabs[0];
-        if (isXOrTwitterUrl(currentTab.url)) {
+        if (apmUtils.isXOrTwitterUrl(currentTab.url)) {
           panelToLoad = 'gmgn';
-        } else if (isGmgnUrl(currentTab.url)) {
+        } else if (apmUtils.isGmgnUrl(currentTab.url)) {
           panelToLoad = 'x';
         }
       }
@@ -714,7 +689,7 @@ document.addEventListener('DOMContentLoaded', () => {
       // whenever we detect a CA, we need to check current tab is X or Twitter
       if (tabs && tabs.length > 0) {
         const currentTab = tabs[0];
-        if (!isXOrTwitterUrl(currentTab.url)) {
+        if (!apmUtils.isXOrTwitterUrl(currentTab.url)) {
           return;
         }
       } else {
@@ -798,7 +773,7 @@ document.addEventListener('DOMContentLoaded', () => {
       }
 
       // if we're on X or Twitter, this is handled by twitter_ca_detector.js
-      if (isXOrTwitterUrl(currentTab.url)) {
+      if (apmUtils.isXOrTwitterUrl(currentTab.url)) {
         return;
       }
 
@@ -898,8 +873,7 @@ document.addEventListener('DOMContentLoaded', () => {
       showNotification('Swapped content with main window', false);
       
       // Load main window URL in the appropriate iframe based on domain
-      const isXUrl = isXOrTwitterUrl(mainWindowUrl);
-      const isGmgnUrl = isGmgnUrl(mainWindowUrl);
+      const isXUrl = apmUtils.isXOrTwitterUrl(mainWindowUrl);
       
       if (isXUrl) {
         // Switch to X iframe if needed
@@ -908,7 +882,7 @@ document.addEventListener('DOMContentLoaded', () => {
         }
         await loadIframe(iframeX, mainWindowUrl, 'Loading main window content', 'x');
         addToHistory(mainWindowUrl, 'x');
-      } else if (isGmgnUrl) {
+      } else if (apmUtils.isGmgnUrl) {
         // Switch to GMGN iframe if needed
         if (currentActiveIframe !== 'gmgn') {
           await toggleIframeSource(false);
@@ -956,8 +930,8 @@ document.addEventListener('DOMContentLoaded', () => {
       const mainWindowUrl = currentTab.url;
       
       // Check if main window has either x.com or gmgn.ai content
-      const isMainWindowX = isXOrTwitterUrl(mainWindowUrl);
-      const isMainWindowGmgn = isGmgnUrl(mainWindowUrl);
+      const isMainWindowX = apmUtils.isXOrTwitterUrl(mainWindowUrl);
+      const isMainWindowGmgn = apmUtils.isGmgnUrl(mainWindowUrl);
       
       // Get current panel content
       const isPanelX = currentActiveIframe === 'x';
