@@ -900,12 +900,12 @@ function injectDetectorCode() {
     const highlightedSpans = document.querySelectorAll('.bitbot-ca-highlight');
     highlightedSpans.forEach(span => {
       try {
-        // Get the original CA text (without the button)
+        // Get the original CA text (without the UI elements)
         const caAddress = span.getAttribute('data-address');
         
-        // First remove any buttons inside the span
-        const buttons = span.querySelectorAll('.bitbot-ca-button');
-        buttons.forEach(btn => btn.parentNode.removeChild(btn));
+        // First remove any buttons/divs inside the span
+        const elements = span.querySelectorAll('.bitbot-ca-button');
+        elements.forEach(el => el.parentNode.removeChild(el));
         
         // Create a new text node with just the CA address
         const textNode = document.createTextNode(caAddress || span.firstChild.textContent);
@@ -924,9 +924,9 @@ function injectDetectorCode() {
     const highlightedLinks = document.querySelectorAll('.bitbot-ca-link-highlight');
     highlightedLinks.forEach(link => {
       try {
-        // First remove any buttons inside the link (for absolute positioning)
-        const buttons = link.querySelectorAll('.bitbot-ca-button');
-        buttons.forEach(btn => btn.parentNode.removeChild(btn));
+        // First remove any buttons/divs inside the link
+        const elements = link.querySelectorAll('.bitbot-ca-button');
+        elements.forEach(el => el.parentNode.removeChild(el));
         
         // Restore original link styling
         link.style.position = '';
@@ -940,68 +940,138 @@ function injectDetectorCode() {
       }
     });
     
-    // Clean up any orphaned Bitbot buttons that might remain outside of links/spans
-    const allButtons = document.querySelectorAll('.bitbot-ca-button');
-    allButtons.forEach(button => {
+    // Clean up any orphaned UI elements that might remain outside of links/spans
+    const allElements = document.querySelectorAll('.bitbot-ca-button');
+    allElements.forEach(element => {
       try {
-        button.parentNode.removeChild(button);
+        element.parentNode.removeChild(element);
       } catch (e) {
-        logToPanel('Error removing orphaned button: ' + e.message);
+        logToPanel('Error removing orphaned UI element: ' + e.message);
       }
     });
   }
   
-  // Function to create and inject the Bitbot UI button for a contract address
+  // Function to create and inject the APM UI for a contract address
   function injectAmpUi(caAddress) {
-    // Create Bitbot button with position:absolute
-    const button = document.createElement('button');
-    button.className = 'bitbot-ca-button';
-    button.style.cssText = 'position: absolute; right: 0; top: 50%; transform: translateY(-50%); background: linear-gradient(45deg, #ff8c00, #ff6347); color: white; border: none; border-radius: 4px; margin-left: 4px; padding: 1px 4px; font-size: 10px; cursor: pointer; display: inline-flex; align-items: center; z-index: 9999;';
+    // Create wrapper div
+    const wrapper = document.createElement('div');
+    wrapper.className = 'bitbot-ca-button'; // Keep the same class for compatibility
+    wrapper.style.cssText = 'margin-left: 4px; height: 28px; background: #252525; border: 1px solid rgba(255,255,255,0.08); border-radius: 4px; padding: 0; display: inline-flex; align-items: center;';
     
-    // Create icon for button
-    let iconElement;
+    // First child div - Trade button
+    const tradeDiv = document.createElement('div');
+    tradeDiv.style.cssText = 'text-decoration: none; padding: 0 8px; display: flex; align-items: center; font-weight: 500; font-size: 14px; color: #FFCD01; cursor: pointer;';
     
-    try {
-      // Try to create image element with SVG icon
-      const icon = document.createElement('img');
-      icon.src = BITBOT_ICON_URL || 'data:image/svg+xml;base64,PHN2ZyB4bWxucz0iaHR0cDovL3d3dy53My5vcmcvMjAwMC9zdmciIHdpZHRoPSIxNiIgaGVpZ2h0PSIxNiIgdmlld0JveD0iMCAwIDE2IDE2Ij48Y2lyY2xlIGN4PSI4IiBjeT0iOCIgcj0iNyIgZmlsbD0iI2ZmZiIvPjwvc3ZnPg==';
-      icon.alt = 'Bitbot';
-      icon.style.cssText = 'height: 12px; width: 12px; margin-right: 2px;';
-      icon.onerror = () => {
-        // If icon fails to load, replace with a simple circle
-        const fallbackIcon = document.createElement('span');
-        fallbackIcon.style.cssText = 'display: inline-block; width: 8px; height: 8px; background-color: white; border-radius: 50%; margin-right: 3px;';
-        button.replaceChild(fallbackIcon, icon);
-      };
-      iconElement = icon;
-    } catch (e) {
-      // Fallback to a simple circle if the icon creation fails
-      const fallbackIcon = document.createElement('span');
-      fallbackIcon.style.cssText = 'display: inline-block; width: 8px; height: 8px; background-color: white; border-radius: 50%; margin-right: 3px;';
-      iconElement = fallbackIcon;
-    }
+    // Add hover effect
+    tradeDiv.addEventListener('mouseover', () => {
+      tradeDiv.style.background = 'rgba(255,255,255,0.16)';
+    });
+    tradeDiv.addEventListener('mouseout', () => {
+      tradeDiv.style.background = 'transparent';
+    });
     
-    // Add text to button
-    const buttonText = document.createTextNode('Bitbot');
+    // Add lightning icon
+    const lightningIcon = document.createElement('img');
+    lightningIcon.src = SVG_ICONS.LIGHTNING;
+    lightningIcon.alt = 'Trade';
+    lightningIcon.style.cssText = 'height: 28px; width: 8px; margin-right: 4px;';
     
-    // Assemble button
-    button.appendChild(iconElement);
-    button.appendChild(buttonText);
+    // Add text
+    const tradeText = document.createTextNode('Trade');
     
-    // Add event handler to button
-    button.addEventListener('click', (e) => {
+    // Assemble trade div
+    tradeDiv.appendChild(lightningIcon);
+    tradeDiv.appendChild(tradeText);
+    
+    // Add click handler to open Telegram bot
+    tradeDiv.addEventListener('click', (e) => {
       e.preventDefault();
       e.stopPropagation();
       
-      // Trigger the same action as when the CA is detected
-      chrome.runtime.sendMessage({
-        action: 'caDetected',
-        contractAddress: caAddress,
-        url: window.location.href
-      });
+      // Open Telegram bot with the contract address
+      window.open(`https://t.me/test_newbitbot?start=trade-${caAddress}`, '_blank');
     });
     
-    return button;
+    // Second child div - Chart button
+    const chartDiv = document.createElement('div');
+    chartDiv.style.cssText = 'height: 28px; width: 36px; display: flex; justify-content: center; align-items: center; cursor: pointer;';
+    
+    // Add hover effect
+    chartDiv.addEventListener('mouseover', () => {
+      chartDiv.style.background = 'rgba(255,255,255,0.16)';
+    });
+    chartDiv.addEventListener('mouseout', () => {
+      chartDiv.style.background = 'transparent';
+    });
+    
+    // Add chart icon
+    const chartIcon = document.createElement('img');
+    chartIcon.src = SVG_ICONS.CHART;
+    chartIcon.alt = 'Chart';
+    chartIcon.style.cssText = 'height: 16px; width: 16px;';
+    
+    // Assemble chart div
+    chartDiv.appendChild(chartIcon);
+    
+    // Add click handler for chart function
+    chartDiv.addEventListener('click', (e) => {
+      e.preventDefault();
+      e.stopPropagation();
+      
+      console.log('sendCaToApm:', caAddress);
+      // sendCaToApm(caAddress); // Function will be implemented later
+    });
+    
+    // Third child div - Copy button
+    const copyDiv = document.createElement('div');
+    copyDiv.style.cssText = 'height: 28px;width: 36px; display: flex; justify-content: center; align-items: center; cursor: pointer;';
+    
+    // Add hover effect
+    copyDiv.addEventListener('mouseover', () => {
+      copyDiv.style.background = 'rgba(255,255,255,0.16)';
+    });
+    copyDiv.addEventListener('mouseout', () => {
+      copyDiv.style.background = 'transparent';
+    });
+    
+    // Add copy icon
+    const copyIcon = document.createElement('img');
+    copyIcon.src = SVG_ICONS.COPY;
+    copyIcon.alt = 'Copy';
+    copyIcon.style.cssText = 'height: 16px; width: 16px;';
+    
+    // Assemble copy div
+    copyDiv.appendChild(copyIcon);
+    
+    // Add click handler for copy function
+    copyDiv.addEventListener('click', (e) => {
+      e.preventDefault();
+      e.stopPropagation();
+      
+      // Copy address to clipboard
+      copyToClipboard(caAddress);
+      
+      // Change icon to tick
+      copyIcon.src = SVG_ICONS.TICK;
+      copyDiv.style.cursor = 'default';
+      
+      // Disable click for 3 seconds
+      copyDiv.style.pointerEvents = 'none';
+      
+      // Set timeout to revert back after 3 seconds
+      setTimeout(() => {
+        copyIcon.src = SVG_ICONS.COPY;
+        copyDiv.style.cursor = 'pointer';
+        copyDiv.style.pointerEvents = 'auto';
+      }, 3000);
+    });
+    
+    // Assemble the wrapper div with all child divs
+    wrapper.appendChild(tradeDiv);
+    wrapper.appendChild(chartDiv);
+    wrapper.appendChild(copyDiv);
+    
+    return wrapper;
   }
   
   // Function to highlight the specific CA text within an element
@@ -1037,7 +1107,7 @@ function injectDetectorCode() {
     highlightSpan.className = 'bitbot-ca-highlight';
     highlightSpan.textContent = caAddress;
     highlightSpan.setAttribute('data-address', caAddress); // Add address as data attribute for later lookup
-    highlightSpan.style.cssText = 'color: #FFCD01; font-weight: bold; text-decoration: underline; position: relative; display: inline-block; padding-right: 60px;'; // Add padding for button
+    highlightSpan.style.cssText = 'display:inline-flex; flex-wrap: wrap; line-height: 2; align-items: center; color: #FFCD01; font-weight: bold; text-decoration: underline; position: relative;'; // Add padding for button
     
     // Create and add Bitbot button using the extracted function
     const button = injectAmpUi(caAddress);
@@ -1087,11 +1157,10 @@ function injectDetectorCode() {
     // Store the original address for reference
     linkElement.setAttribute('data-address', caAddress);
     linkElement.setAttribute('data-bitbot-found-ca', 'true');
-    linkElement.style.cssText = 'color: #FFCD01; font-weight: bold; text-decoration: underline;';
+    linkElement.style.cssText = 'display:inline-flex; flex-wrap: wrap; line-height: 2; align-items: center; color: #FFCD01; font-weight: bold; text-decoration: underline;';
     
     // Customize the button's style for link elements
     const button = injectAmpUi(caAddress);
-    button.style.right = '-60px'; // Override the right position for links
     
     // Append the button directly to the link element for absolute positioning
     linkElement.appendChild(button);
@@ -1273,6 +1342,56 @@ function injectDetectorCode() {
   
   // Run initialization
   initialize();
+
+  // Function to copy text to clipboard
+  function copyToClipboard(text) {
+    // Use the Clipboard API if available
+    if (navigator.clipboard && navigator.clipboard.writeText) {
+      navigator.clipboard.writeText(text)
+        .then(() => {
+          console.log('Text copied to clipboard');
+        })
+        .catch(error => {
+          console.error('Error copying text to clipboard:', error);
+          fallbackCopyToClipboard(text);
+        });
+    } else {
+      // Fallback for browsers that don't support the Clipboard API
+      fallbackCopyToClipboard(text);
+    }
+  }
+
+  // Fallback method for older browsers
+  function fallbackCopyToClipboard(text) {
+    const textArea = document.createElement('textarea');
+    textArea.value = text;
+    
+    // Make the textarea out of viewport
+    textArea.style.position = 'fixed';
+    textArea.style.left = '-999999px';
+    textArea.style.top = '-999999px';
+    
+    document.body.appendChild(textArea);
+    textArea.focus();
+    textArea.select();
+    
+    try {
+      const successful = document.execCommand('copy');
+      console.log(successful ? 'Text copied to clipboard' : 'Copy failed');
+    } catch (error) {
+      console.error('Error copying text to clipboard:', error);
+    }
+    
+    document.body.removeChild(textArea);
+  }
+
+  // Base64 encoded SVG icons
+  const SVG_ICONS = {
+    LIGHTNING: 'data:image/svg+xml;base64,PHN2ZyB3aWR0aD0iOCIgaGVpZ2h0PSIxNiIgdmlld0JveD0iMCAwIDggMTYiIGZpbGw9Im5vbmUiIHhtbG5zPSJodHRwOi8vd3d3LnczLm9yZy8yMDAwL3N2ZyI+CjxwYXRoIGQ9Ik0zLjIxMTYgMTQuOTk5NUgyLjQwNTlMMS41MTYxNSAxMy42OTg3TDMuMzg5NDkgOC43MTQ3NUgxLjg5MTU0TDEgNy40MTE1MUwzLjM0NDM2IDEuOTkxNDhMNi41MTM0NyAwLjY5MDY3NEw3LjQxNjEyIDEuOTkxNDhMNC43MDEwOSA4LjIyNzU2TDUuOTAzNDcgNi45Mjk3M0w2LjgwNzU4IDguMjI3NTZMMy4yMTE2IDE0Ljk5OTVaIiBmaWxsPSIjMkIyQjJCIiBzdHJva2U9ImJsYWNrIiBzdHJva2Utd2lkdGg9IjAuMjkwMzM3IiBzdHJva2UtbGluZWpvaW49InJvdW5kIi8+CjxwYXRoIGQ9Ik0xLjUxNDM2IDEzLjY5ODdMMi40OTc5NSA3LjQxMzk0SDFMMi40NTI4MiAwLjY5MDY3NEg2LjUyNDU4TDMuODA5NTUgNi45MjY3NUg1LjkxNjA0TDIuNDA0MSAxMy42OTg3SDEuNTE0MzZaIiBmaWxsPSIjRkZDRDAwIiBzdHJva2U9ImJsYWNrIiBzdHJva2Utd2lkdGg9IjAuMjkwMzM3IiBzdHJva2UtbGluZWpvaW49InJvdW5kIi8+CjxwYXRoIGQ9Ik0yLjQwODE0IDEzLjY5OTFMMy4xOTk1NCAxNC45OTk5SDIuMzA4TDEuNTE2NiAxMy42OTkxSDIuNDA4MTRaIiBmaWxsPSIjNTQ1NDU0IiBzdHJva2U9ImJsYWNrIiBzdHJva2Utd2lkdGg9IjAuMjkwMzM3IiBzdHJva2UtbGluZWpvaW49InJvdW5kIi8+Cjwvc3ZnPgo=',
+    CHART: 'data:image/svg+xml;base64,PHN2ZyB3aWR0aD0iMTYiIGhlaWdodD0iMTYiIHZpZXdCb3g9IjAgMCAxNiAxNiIgZmlsbD0ibm9uZSIgeG1sbnM9Imh0dHA6Ly93d3cudzMub3JnLzIwMDAvc3ZnIj4KPHBhdGggZD0iTTUuMzMzMzMgMy4zMzMzN0g3LjMzMzMzVjkuMzMzMzdINS4zMzMzM1YxMS4zMzM0SDRWOS4zMzMzN0gyVjMuMzMzMzdINFYxLjMzMzM3SDUuMzMzMzNWMy4zMzMzN1pNMy4zMzMzMyA0LjY2NjcxVjguMDAwMDRINlY0LjY2NjcxSDMuMzMzMzNaTTEyIDYuNjY2NzFIMTRWMTIuNjY2N0gxMlYxNC42NjY3SDEwLjY2NjdWMTIuNjY2N0g4LjY2NjY3VjYuNjY2NzFIMTAuNjY2N1Y0LjY2NjcxSDEyVjYuNjY2NzFaTTEwIDguMDAwMDRWMTEuMzMzNEgxMi42NjY3VjguMDAwMDRIMTBaIiBmaWxsPSJ3aGl0ZSIvPgo8L3N2Zz4K',
+    COPY: 'data:image/svg+xml;base64,PHN2ZyB3aWR0aD0iMTYiIGhlaWdodD0iMTYiIHZpZXdCb3g9IjAgMCAxNiAxNiIgZmlsbD0ibm9uZSIgeG1sbnM9Imh0dHA6Ly93d3cudzMub3JnLzIwMDAvc3ZnIj4KPHBhdGggZD0iTTQuNjY2NjcgNC4wMDAwNFYyLjAwMDA0QzQuNjY2NjcgMS44MjMyMyA0LjczNjkgMS42NTM2NiA0Ljg2MTkzIDEuNTI4NjRDNC45ODY5NSAxLjQwMzYxIDUuMTU2NTIgMS4zMzMzNyA1LjMzMzMzIDEuMzMzMzdIMTMuMzMzM0MxMy41MTAxIDEuMzMzMzcgMTMuNjc5NyAxLjQwMzYxIDEzLjgwNDcgMS41Mjg2NEMxMy45Mjk4IDEuNjUzNjYgMTQgMS44MjMyMyAxNCAyLjAwMDA0VjExLjMzMzRDMTQgMTEuNTEwMiAxMy45Mjk4IDExLjY3OTggMTMuODA0NyAxMS44MDQ4QzEzLjY3OTcgMTEuOTI5OCAxMy41MTAxIDEyIDEzLjMzMzMgMTJIMTEuMzMzM1YxNEMxMS4zMzMzIDE0LjM2OCAxMS4wMzMzIDE0LjY2NjcgMTAuNjYyIDE0LjY2NjdIMi42NzEzM0MyLjU4MzQyIDE0LjY2NzIgMi40OTYyNiAxNC42NTA0IDIuNDE0ODggMTQuNjE3MUMyLjMzMzUgMTQuNTgzOSAyLjI1OTQ5IDE0LjUzNDkgMi4xOTcxMSAxNC40NzI5QzIuMTM0NzIgMTQuNDExIDIuMDg1MiAxNC4zMzczIDIuMDUxMzcgMTQuMjU2MUMyLjAxNzU0IDE0LjE3NSAyLjAwMDA5IDE0LjA4OCAyIDE0TDIuMDAyIDQuNjY2NzFDMi4wMDIgNC4yOTg3MSAyLjMwMiA0LjAwMDA0IDIuNjczMzMgNC4wMDAwNEg0LjY2NjY3Wk0zLjMzNTMzIDUuMzMzMzdMMy4zMzMzMyAxMy4zMzM0SDEwVjUuMzMzMzdIMy4zMzUzM1pNNiA0LjAwMDA0SDExLjMzMzNWMTAuNjY2N0gxMi42NjY3VjIuNjY2NzFINlY0LjAwMDA0WiIgZmlsbD0id2hpdGUiLz4KPC9zdmc+Cg==',
+    TICK: 'data:image/svg+xml;base64,PHN2ZyB3aWR0aD0iMTYiIGhlaWdodD0iMTYiIHZpZXdCb3g9IjAgMCAyMCAyMCIgZmlsbD0ibm9uZSIgeG1sbnM9Imh0dHA6Ly93d3cudzMub3JnLzIwMDAvc3ZnIj4KPHBhdGggZD0iTTguMDQ1NjMgMTMuMDc0NUwxNi45NTI3IDQuMTY2NUwxOC4zMjM4IDUuNTM2NjdMOC4wNDU2MyAxNS44MTQ5TDEuODc4OTEgOS42NDgxNEwzLjI0OTA3IDguMjc3OTdMOC4wNDU2MyAxMy4wNzQ1WiIgZmlsbD0iIzgzRDk0RiIvPgo8L3N2Zz4K'
+  };
 }
 
 // Initialize when the script loads
