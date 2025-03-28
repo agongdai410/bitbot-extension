@@ -78,6 +78,25 @@ const sidePanelUrls = new Set();
 // Track the last token we've detected to avoid redundant searches
 let lastDetectedToken = null;
 
+// Listen for extension icon clicks
+chrome.action.onClicked.addListener((tab) => {
+  console.log('Extension icon clicked, opening side panel');
+  // Open the side panel in the current window
+  chrome.sidePanel.open({ windowId: tab.windowId }).catch((error) => {
+    console.error('Error opening side panel:', error);
+    
+    // Try fallback method if the first attempt fails
+    console.log('Trying fallback method to open side panel');
+    try {
+      chrome.sidePanel.open().catch(fallbackError => {
+        console.error('Fallback method also failed:', fallbackError);
+      });
+    } catch (fallbackError) {
+      console.error('Fallback method also failed:', fallbackError);
+    }
+  });
+});
+
 // Register this service worker
 self.addEventListener('install', (event) => {
   console.log('Service Worker: Installed');
