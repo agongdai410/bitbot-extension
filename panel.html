@@ -6,8 +6,44 @@
   <meta http-equiv="Content-Security-Policy" content="default-src 'self'; frame-src *; script-src 'self' 'unsafe-inline'; style-src 'self' 'unsafe-inline';">
   <title>Web Viewer Extension</title>
   <style>
+    /* Font imports */
+    @font-face {
+      font-family: 'Roboto Mono';
+      src: url('fonts/RobotoMono-Bold.ttf') format('truetype');
+      font-weight: 700;
+      font-style: normal;
+      font-display: swap;
+    }
+    
+    @font-face {
+      font-family: 'IBM Plex Sans';
+      src: url('fonts/IBMPlexSans-Regular.ttf') format('truetype');
+      font-weight: 400;
+      font-style: normal;
+      font-display: swap;
+    }
+    
+    @font-face {
+      font-family: 'IBM Plex Sans';
+      src: url('fonts/IBMPlexSans-Medium.ttf') format('truetype');
+      font-weight: 500;
+      font-style: normal;
+      font-display: swap;
+    }
+    
+    /* Utility class for monospace text */
+    .monospace {
+      font-family: 'Roboto Mono', monospace;
+      font-weight: 700;
+    }
+    
+    /* Utility class for medium weight text */
+    .medium-weight {
+      font-weight: 500;
+    }
+
     :root {
-      --primary-color: #1DA1F2;
+      --primary-color: #FFCD00;
       --secondary-color: #14171A;
       --background-color: #212128;
       --text-color: #0B0C0E;
@@ -22,7 +58,7 @@
     body {
       margin: 0;
       padding: 0;
-      font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, Helvetica, Arial, sans-serif;
+      font-family: 'IBM Plex Sans', -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, Helvetica, Arial, sans-serif;
       background-color: var(--background-color);
       color: var(--text-color);
       display: flex;
@@ -315,23 +351,23 @@
 
     .footer {
       margin: 8px;
-    }
-
-    #trade-button {
-      background-color: var(--green-color);
-      background-color: var(--green-color);
-      color: var(--text-color);
-      border: none;
-      border-radius: 8px;
-      cursor: pointer;
-      height: 44px;
-      width: 100%;
-      font-size: 16px;
-      font-weight: 500;
       display: flex;
       align-items: center;
       justify-content: center;
-      gap: 4px;
+      gap: 48px;
+    }
+
+    #trade-button {
+      background: linear-gradient(180deg, #454545 0%, #232323 100%);
+      color: var(--primary-color);
+      border: 1px solid #1A1A1A;
+      border-radius: 8px;
+      cursor: pointer;
+      height: 44px;
+      line-height: 1;
+      flex: 1;
+      font-size: 16px;
+      box-shadow: 0px -4px 0px 0px #121212 inset;
     }
   </style>
 </head>
@@ -371,7 +407,7 @@
         <label for="x-refresh-enabled">
           <span class="setting-item-header">On X</span>
           <div class="setting-item-description">
-            The X page on the secondary browser will auto-fetch the main browser’s token contract address and find top posts linked to it.
+            The X page on the secondary browser will auto-fetch the main browser's token contract address and find top posts linked to it.
           </div>
         </label>
         <div>
@@ -382,7 +418,7 @@
         <label for="gmgn-refresh-enabled">
           <span class="setting-item-header">On GMGN</span>
           <div class="setting-item-description">
-            The GMGN page on the secondary browser will auto-fetch the main browser’s token contract address and find the chart linked to it.
+            The GMGN page on the secondary browser will auto-fetch the main browser's token contract address and find the chart linked to it.
           </div>
         </label>
         <div>
@@ -418,9 +454,9 @@
   </div>
 
   <div class="footer">
-    <button id="trade-button">
-      <img src="icons/bitbot.svg" alt="Bitbot">
-      Trade on Bitbot
+    <img src="icons/apm.svg" alt="apm.fun">
+    <button id="trade-button" class="monospace">
+      Quick Trade
     </button>
   </div>
 
