@@ -27,6 +27,7 @@ document.addEventListener('DOMContentLoaded', () => {
   // Track history for each iframe - initialize from localStorage if available
   let xHistory = apmUtils.loadFromLocalStorage('x_history', { current: -1, urls: [] });
   let gmgnHistory = apmUtils.loadFromLocalStorage('gmgn_history', { current: -1, urls: [] });
+  let settings = apmUtils.loadFromLocalStorage('settings', { autoRefreshGmgn: true, autoRefreshX: true });
   // Max history size
   const MAX_HISTORY_SIZE = 100;
   
@@ -43,7 +44,7 @@ document.addEventListener('DOMContentLoaded', () => {
       iframeGmgn.classList.remove('active');
       btnXIcon.classList.add('active');
       btnGmgnIcon.classList.remove('active');
-    } else {
+        } else {
       iframeGmgn.style.display = '';
       iframeGmgn.style.opacity = '1';
       iframeGmgn.classList.add('active');
@@ -410,7 +411,7 @@ document.addEventListener('DOMContentLoaded', () => {
         // Send message to service worker
         navigator.serviceWorker.controller.postMessage({
           type: 'PREPARE_URL',
-          url: url,
+            url: url,
           messageId: messageId,
           iframeId: iframeId
         });
@@ -579,6 +580,35 @@ document.addEventListener('DOMContentLoaded', () => {
     }
   }
   
+  // Initialize settings from localStorage and set up event listeners for checkboxes
+  function initializeSettings() {
+    // Get checkbox elements
+    const autoRefreshXCheckbox = document.getElementById('auto-refresh-x-enabled');
+    const autoRefreshGmgnCheckbox = document.getElementById('auto-refresh-gmgn-enabled');
+    
+    // Load settings from localStorage
+    if (settings.autoRefreshX !== undefined) {
+      autoRefreshXCheckbox.checked = settings.autoRefreshX;
+    }
+    
+    if (settings.autoRefreshGmgn !== undefined) {
+      autoRefreshGmgnCheckbox.checked = settings.autoRefreshGmgn;
+    }
+    
+    // Add event listeners for checkbox changes
+    autoRefreshXCheckbox.addEventListener('change', function() {
+      settings.autoRefreshX = this.checked;
+      apmUtils.saveToLocalStorage('settings', settings);
+      console.log('Auto refresh X setting updated:', settings.autoRefreshX);
+    });
+    
+    autoRefreshGmgnCheckbox.addEventListener('change', function() {
+      settings.autoRefreshGmgn = this.checked;
+      apmUtils.saveToLocalStorage('settings', settings);
+      console.log('Auto refresh GMGN setting updated:', settings.autoRefreshGmgn);
+    });
+  }
+  
   // Event Listeners
   btnXIcon.addEventListener('click', () => toggleIframeSource(true));
   btnGmgnIcon.addEventListener('click', () => toggleIframeSource(false));
@@ -672,6 +702,9 @@ document.addEventListener('DOMContentLoaded', () => {
       bypassCloudflare(targetIframe);
     }
     else if (event.data.type === 'CA_DETECTED_ON_GMGN_URL') {
+      if (!settings.autoRefreshX) {
+        return;
+      }
       console.log('Token detected in main browser:', event.data.gmgnUrl);
       const tokenAddress = extractContractAddress(event.data.gmgnUrl);
       
@@ -685,6 +718,9 @@ document.addEventListener('DOMContentLoaded', () => {
       showNotification(`Searching for ${event.data.tokenAddress.slice(0, 8)}... on X`, false);
     }
     else if (event.data.type === 'CA_DETECTED_ON_X') {
+      if (!settings.autoRefreshGmgn) {
+        return;
+      }
       const tabs = await chrome.tabs.query({active: true, currentWindow: true});
       // whenever we detect a CA, we need to check current tab is X or Twitter
       if (tabs && tabs.length > 0) {
@@ -836,6 +872,7 @@ document.addEventListener('DOMContentLoaded', () => {
   
   // Initialize on load
   initServiceWorker();
+  initializeSettings();
   
   // Debug message to confirm panel script initialized
   console.log('Panel script initialized');
