@@ -488,10 +488,11 @@ document.addEventListener('DOMContentLoaded', () => {
     notification.style.backgroundColor = error ? '#ff0000' : '#333';
     // Set message and show
     notification.textContent = message;
+    notification.style.display = 'flex';
     notification.style.opacity = '1';
-    
     // Hide after duration
     setTimeout(() => {
+      notification.style.display = 'none';
       notification.style.opacity = '0';
     }, duration);
   }
