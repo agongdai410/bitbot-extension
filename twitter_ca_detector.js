@@ -907,8 +907,15 @@ function injectDetectorCode() {
         const elements = span.querySelectorAll('.bitbot-ca-button');
         elements.forEach(el => el.parentNode.removeChild(el));
         
+        // Get the CA text from the inner span if it exists, or from the attribute
+        let caText = caAddress;
+        const caTextSpan = span.querySelector('.bitbot-ca-text');
+        if (caTextSpan) {
+          caText = caTextSpan.textContent || caAddress;
+        }
+        
         // Create a new text node with just the CA address
-        const textNode = document.createTextNode(caAddress || span.firstChild.textContent);
+        const textNode = document.createTextNode(caText);
         
         // Replace the span with the text node
         const parent = span.parentNode;
@@ -920,23 +927,34 @@ function injectDetectorCode() {
       }
     });
     
-    // Link highlights
-    const highlightedLinks = document.querySelectorAll('.bitbot-ca-link-highlight');
-    highlightedLinks.forEach(link => {
+    // Link highlights with wrappers
+    const highlightWrappers = document.querySelectorAll('.bitbot-ca-link-wrapper');
+    highlightWrappers.forEach(wrapper => {
       try {
-        // First remove any buttons/divs inside the link
-        const elements = link.querySelectorAll('.bitbot-ca-button');
-        elements.forEach(el => el.parentNode.removeChild(el));
-        
-        // Restore original link styling
-        link.style.position = '';
-        link.classList.remove('bitbot-ca-link-highlight');
-        
-        // Critical fix: Remove data attributes so the link can be re-processed
-        link.removeAttribute('data-bitbot-found-ca');
-        link.removeAttribute('data-address');
+        // Find the link inside the wrapper
+        const link = wrapper.querySelector('.bitbot-ca-link-highlight');
+        if (link) {
+          // Restore original link styling
+          link.style.position = '';
+          link.classList.remove('bitbot-ca-link-highlight');
+          
+          // Remove data attributes so the link can be re-processed
+          link.removeAttribute('data-bitbot-found-ca');
+          link.removeAttribute('data-address');
+          
+          // Remove any buttons that might be directly inside the link (shouldn't be there with the new approach)
+          const elements = link.querySelectorAll('.bitbot-ca-button');
+          elements.forEach(el => el.parentNode.removeChild(el));
+          
+          // Move the link out of the wrapper back to its original position
+          wrapper.parentNode.insertBefore(link, wrapper);
+          wrapper.parentNode.removeChild(wrapper);
+        } else {
+          // If no link found, just remove the wrapper
+          wrapper.parentNode.removeChild(wrapper);
+        }
       } catch (e) {
-        logToPanel('Error removing link highlight: ' + e.message);
+        logToPanel('Error removing highlight wrapper: ' + e.message);
       }
     });
     
@@ -956,7 +974,7 @@ function injectDetectorCode() {
     // Create wrapper div
     const wrapper = document.createElement('div');
     wrapper.className = 'bitbot-ca-button'; // Keep the same class for compatibility
-    wrapper.style.cssText = 'margin-left: 4px; height: 28px; background: #252525; border: 1px solid rgba(255,255,255,0.08); border-radius: 4px; padding: 0; display: inline-flex; align-items: center;';
+    wrapper.style.cssText = 'height: 28px; background: #252525; border: 1px solid rgba(255,255,255,0.08); border-radius: 4px; padding: 0; display: inline-flex; align-items: center;';
     
     // First child div - Trade button
     const tradeDiv = document.createElement('div');
@@ -1102,12 +1120,20 @@ function injectDetectorCode() {
     const beforeText = text.substring(0, caIndex);
     const afterText = text.substring(caIndex + caAddress.length);
     
-    // Create the highlighted span for the CA with position:relative
+    // Create the outer wrapper span with flex layout
     const highlightSpan = document.createElement('span');
     highlightSpan.className = 'bitbot-ca-highlight';
-    highlightSpan.textContent = caAddress;
     highlightSpan.setAttribute('data-address', caAddress); // Add address as data attribute for later lookup
-    highlightSpan.style.cssText = 'display:inline-flex; flex-wrap: wrap; line-height: 2; align-items: center; color: #FFCD01; font-weight: bold; text-decoration: underline; position: relative;'; // Add padding for button
+    highlightSpan.style.cssText = 'display:inline-flex; flex-wrap: wrap; line-height: 2; align-items: center; position: relative;';
+    
+    // Create inner span specifically for the CA text with styling
+    const caTextSpan = document.createElement('span');
+    caTextSpan.className = 'bitbot-ca-text';
+    caTextSpan.textContent = caAddress;
+    caTextSpan.style.cssText = 'color: #FFCD01; font-weight: bold; text-decoration: underline;';
+    
+    // Add the CA text span to the wrapper span
+    highlightSpan.appendChild(caTextSpan);
     
     // Create and add Bitbot button using the extracted function
     const button = injectAmpUi(caAddress);
@@ -1125,7 +1151,7 @@ function injectDetectorCode() {
     parent.insertBefore(highlightSpan, afterNode);
     parent.insertBefore(beforeNode, highlightSpan);
     
-    logToPanel('Successfully highlighted CA text with absolute positioned Bitbot button');
+    logToPanel('Successfully highlighted CA text with inner span and button');
   }
   
   // Function to highlight a link element containing a CA
@@ -1145,6 +1171,14 @@ function injectDetectorCode() {
       }
     }
     
+    // Check if the link is already wrapped
+    if (linkElement.parentNode && linkElement.parentNode.classList.contains('bitbot-ca-link-wrapper')) {
+      // Remove the existing wrapper and put the link back in place
+      const wrapper = linkElement.parentNode;
+      wrapper.parentNode.insertBefore(linkElement, wrapper);
+      wrapper.parentNode.removeChild(wrapper);
+    }
+    
     // Since we're using absolute positioning, we need to create a wrapper if the link isn't already positioned
     const currentPosition = window.getComputedStyle(linkElement).position;
     if (currentPosition === 'static') {
@@ -1157,15 +1191,24 @@ function injectDetectorCode() {
     // Store the original address for reference
     linkElement.setAttribute('data-address', caAddress);
     linkElement.setAttribute('data-bitbot-found-ca', 'true');
-    linkElement.style.cssText = 'display:inline-flex; flex-wrap: wrap; line-height: 2; align-items: center; color: #FFCD01; font-weight: bold; text-decoration: underline;';
+    linkElement.style.cssText = 'color: #FFCD01; font-weight: bold; text-decoration: underline;';
     
-    // Customize the button's style for link elements
+    // Create a wrapper element
+    const wrapper = document.createElement('div');
+    wrapper.className = 'bitbot-ca-link-wrapper';
+    wrapper.style.cssText = 'display: inline-flex; flex-wrap: wrap; line-height: 2; align-items: center; gap: 8px;';
+    
+    // Insert the wrapper into the DOM in place of the linkElement
+    linkElement.parentNode.insertBefore(wrapper, linkElement);
+    
+    // Move the linkElement into the wrapper
+    wrapper.appendChild(linkElement);
+    
+    // Create and add button to the wrapper (not the link)
     const button = injectAmpUi(caAddress);
+    wrapper.appendChild(button);
     
-    // Append the button directly to the link element for absolute positioning
-    linkElement.appendChild(button);
-    
-    logToPanel('Successfully highlighted link element with absolute positioned Bitbot button');
+    logToPanel('Successfully highlighted link element with a wrapper and button');
   }
   
   // Set up scroll event listener
@@ -1388,7 +1431,7 @@ function injectDetectorCode() {
   // Base64 encoded SVG icons
   const SVG_ICONS = {
     LIGHTNING: 'data:image/svg+xml;base64,PHN2ZyB3aWR0aD0iOCIgaGVpZ2h0PSIxNiIgdmlld0JveD0iMCAwIDggMTYiIGZpbGw9Im5vbmUiIHhtbG5zPSJodHRwOi8vd3d3LnczLm9yZy8yMDAwL3N2ZyI+CjxwYXRoIGQ9Ik0zLjIxMTYgMTQuOTk5NUgyLjQwNTlMMS41MTYxNSAxMy42OTg3TDMuMzg5NDkgOC43MTQ3NUgxLjg5MTU0TDEgNy40MTE1MUwzLjM0NDM2IDEuOTkxNDhMNi41MTM0NyAwLjY5MDY3NEw3LjQxNjEyIDEuOTkxNDhMNC43MDEwOSA4LjIyNzU2TDUuOTAzNDcgNi45Mjk3M0w2LjgwNzU4IDguMjI3NTZMMy4yMTE2IDE0Ljk5OTVaIiBmaWxsPSIjMkIyQjJCIiBzdHJva2U9ImJsYWNrIiBzdHJva2Utd2lkdGg9IjAuMjkwMzM3IiBzdHJva2UtbGluZWpvaW49InJvdW5kIi8+CjxwYXRoIGQ9Ik0xLjUxNDM2IDEzLjY5ODdMMi40OTc5NSA3LjQxMzk0SDFMMi40NTI4MiAwLjY5MDY3NEg2LjUyNDU4TDMuODA5NTUgNi45MjY3NUg1LjkxNjA0TDIuNDA0MSAxMy42OTg3SDEuNTE0MzZaIiBmaWxsPSIjRkZDRDAwIiBzdHJva2U9ImJsYWNrIiBzdHJva2Utd2lkdGg9IjAuMjkwMzM3IiBzdHJva2UtbGluZWpvaW49InJvdW5kIi8+CjxwYXRoIGQ9Ik0yLjQwODE0IDEzLjY5OTFMMy4xOTk1NCAxNC45OTk5SDIuMzA4TDEuNTE2NiAxMy42OTkxSDIuNDA4MTRaIiBmaWxsPSIjNTQ1NDU0IiBzdHJva2U9ImJsYWNrIiBzdHJva2Utd2lkdGg9IjAuMjkwMzM3IiBzdHJva2UtbGluZWpvaW49InJvdW5kIi8+Cjwvc3ZnPgo=',
-    CHART: 'data:image/svg+xml;base64,PHN2ZyB3aWR0aD0iMTYiIGhlaWdodD0iMTYiIHZpZXdCb3g9IjAgMCAxNiAxNiIgZmlsbD0ibm9uZSIgeG1sbnM9Imh0dHA6Ly93d3cudzMub3JnLzIwMDAvc3ZnIj4KPHBhdGggZD0iTTUuMzMzMzMgMy4zMzMzN0g3LjMzMzMzVjkuMzMzMzdINS4zMzMzM1YxMS4zMzM0SDRWOS4zMzMzN0gyVjMuMzMzMzdINFYxLjMzMzM3SDUuMzMzMzNWMy4zMzMzN1pNMy4zMzMzMyA0LjY2NjcxVjguMDAwMDRINlY0LjY2NjcxSDMuMzMzMzNaTTEyIDYuNjY2NzFIMTRWMTIuNjY2N0gxMlYxNC42NjY3SDEwLjY2NjdWMTIuNjY2N0g4LjY2NjY3VjYuNjY2NzFIMTAuNjY2N1Y0LjY2NjcxSDEyVjYuNjY2NzFaTTEwIDguMDAwMDRWMTEuMzMzNEgxMi42NjY3VjguMDAwMDRIMTBaIiBmaWxsPSJ3aGl0ZSIvPgo8L3N2Zz4K',
+    CHART: 'data:image/svg+xml;base64,PHN2ZyB3aWR0aD0iMTYiIGhlaWdodD0iMTYiIHZpZXdCb3g9IjAgMCAxNiAxNiIgZmlsbD0ibm9uZSIgeG1sbnM9Imh0dHA6Ly93d3cudzMub3JnLzIwMDAvc3ZnIj4KPHBhdGggZD0iTTUuMzMzMzMgMy4zMzMzN0g3LjMzMzMzVjkuMzMzMzdINS4zMzMzM1YxMS4zMzM0SDRWOS4zMzMzN0gyVjMuMzMzMzdINFYxLjMzMzM3SDUuMzMzMzNWMy4zMzMzN1pNMy4zMzMzMyA0LjY2NjcxVjguMDAwMDRINlY0LjY2NjcxSDMuMzMzMzNaTTEyIDYuNjY2NzFIMTRWMTIuNjY2N0gxMlYxNC42NjY3SDEwLjY2NjdWMTQuNjY2N0g4LjY2NjY3VjYuNjY2NzFIMTAuNjY2N1Y0LjY2NjcxSDEyVjYuNjY2NzFaTTEwIDguMDAwMDRWMTEuMzMzNEgxMi42NjY3VjguMDAwMDRIMTBaIiBmaWxsPSJ3aGl0ZSIvPgo8L3N2Zz4K',
     COPY: 'data:image/svg+xml;base64,PHN2ZyB3aWR0aD0iMTYiIGhlaWdodD0iMTYiIHZpZXdCb3g9IjAgMCAxNiAxNiIgZmlsbD0ibm9uZSIgeG1sbnM9Imh0dHA6Ly93d3cudzMub3JnLzIwMDAvc3ZnIj4KPHBhdGggZD0iTTQuNjY2NjcgNC4wMDAwNFYyLjAwMDA0QzQuNjY2NjcgMS44MjMyMyA0LjczNjkgMS42NTM2NiA0Ljg2MTkzIDEuNTI4NjRDNC45ODY5NSAxLjQwMzYxIDUuMTU2NTIgMS4zMzMzNyA1LjMzMzMzIDEuMzMzMzdIMTMuMzMzM0MxMy41MTAxIDEuMzMzMzcgMTMuNjc5NyAxLjQwMzYxIDEzLjgwNDcgMS41Mjg2NEMxMy45Mjk4IDEuNjUzNjYgMTQgMS44MjMyMyAxNCAyLjAwMDA0VjExLjMzMzRDMTQgMTEuNTEwMiAxMy45Mjk4IDExLjY3OTggMTMuODA0NyAxMS44MDQ4QzEzLjY3OTcgMTEuOTI5OCAxMy41MTAxIDEyIDEzLjMzMzMgMTJIMTEuMzMzM1YxNEMxMS4zMzMzIDE0LjM2OCAxMS4wMzMzIDE0LjY2NjcgMTAuNjYyIDE0LjY2NjdIMi42NzEzM0MyLjU4MzQyIDE0LjY2NzIgMi40OTYyNiAxNC42NTA0IDIuNDE0ODggMTQuNjE3MUMyLjMzMzUgMTQuNTgzOSAyLjI1OTQ5IDE0LjUzNDkgMi4xOTcxMSAxNC40NzI5QzIuMTM0NzIgMTQuNDExIDIuMDg1MiAxNC4zMzczIDIuMDUxMzcgMTQuMjU2MUMyLjAxNzU0IDE0LjE3NSAyLjAwMDA5IDE0LjA4OCAyIDE0TDIuMDAyIDQuNjY2NzFDMi4wMDIgNC4yOTg3MSAyLjMwMiA0LjAwMDA0IDIuNjczMzMgNC4wMDAwNEg0LjY2NjY3Wk0zLjMzNTMzIDUuMzMzMzdMMy4zMzMzMyAxMy4zMzM0SDEwVjUuMzMzMzdIMy4zMzUzM1pNNiA0LjAwMDA0SDExLjMzMzNWMTAuNjY2N0gxMi42NjY3VjIuNjY2NzFINlY0LjAwMDA0WiIgZmlsbD0id2hpdGUiLz4KPC9zdmc+Cg==',
     TICK: 'data:image/svg+xml;base64,PHN2ZyB3aWR0aD0iMTYiIGhlaWdodD0iMTYiIHZpZXdCb3g9IjAgMCAyMCAyMCIgZmlsbD0ibm9uZSIgeG1sbnM9Imh0dHA6Ly93d3cudzMub3JnLzIwMDAvc3ZnIj4KPHBhdGggZD0iTTguMDQ1NjMgMTMuMDc0NUwxNi45NTI3IDQuMTY2NUwxOC4zMjM4IDUuNTM2NjdMOC4wNDU2MyAxNS44MTQ5TDEuODc4OTEgOS42NDgxNEwzLjI0OTA3IDguMjc3OTdMOC4wNDU2MyAxMy4wNzQ1WiIgZmlsbD0iIzgzRDk0RiIvPgo8L3N2Zz4K'
   };
