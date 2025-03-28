@@ -951,41 +951,8 @@ function injectDetectorCode() {
     });
   }
   
-  // Function to highlight the specific CA text within an element
-  function highlightCAText(element, caAddress) {
-    // Find the text node containing the CA
-    const walker = document.createTreeWalker(
-      element, 
-      NodeFilter.SHOW_TEXT,
-      { acceptNode: node => node.textContent.includes(caAddress) ? NodeFilter.FILTER_ACCEPT : NodeFilter.FILTER_REJECT }
-    );
-    
-    const textNode = walker.nextNode();
-    if (!textNode) {
-      logToPanel('Could not find text node containing CA');
-      return;
-    }
-    
-    // Get the text content and index of the CA
-    const text = textNode.textContent;
-    const caIndex = text.indexOf(caAddress);
-    
-    if (caIndex === -1) {
-      logToPanel('Could not find CA in text node');
-      return;
-    }
-    
-    // Split the text node into before, CA, and after parts
-    const beforeText = text.substring(0, caIndex);
-    const afterText = text.substring(caIndex + caAddress.length);
-    
-    // Create the highlighted span for the CA with position:relative
-    const highlightSpan = document.createElement('span');
-    highlightSpan.className = 'bitbot-ca-highlight';
-    highlightSpan.textContent = caAddress;
-    highlightSpan.setAttribute('data-address', caAddress); // Add address as data attribute for later lookup
-    highlightSpan.style.cssText = 'position: relative; display: inline-block; padding-right: 60px;'; // Add padding for button
-    
+  // Function to create and inject the Bitbot UI button for a contract address
+  function injectAmpUi(caAddress) {
     // Create Bitbot button with position:absolute
     const button = document.createElement('button');
     button.className = 'bitbot-ca-button';
@@ -1034,7 +1001,46 @@ function injectDetectorCode() {
       });
     });
     
-    // Add button to the highlight span
+    return button;
+  }
+  
+  // Function to highlight the specific CA text within an element
+  function highlightCAText(element, caAddress) {
+    // Find the text node containing the CA
+    const walker = document.createTreeWalker(
+      element, 
+      NodeFilter.SHOW_TEXT,
+      { acceptNode: node => node.textContent.includes(caAddress) ? NodeFilter.FILTER_ACCEPT : NodeFilter.FILTER_REJECT }
+    );
+    
+    const textNode = walker.nextNode();
+    if (!textNode) {
+      logToPanel('Could not find text node containing CA');
+      return;
+    }
+    
+    // Get the text content and index of the CA
+    const text = textNode.textContent;
+    const caIndex = text.indexOf(caAddress);
+    
+    if (caIndex === -1) {
+      logToPanel('Could not find CA in text node');
+      return;
+    }
+    
+    // Split the text node into before, CA, and after parts
+    const beforeText = text.substring(0, caIndex);
+    const afterText = text.substring(caIndex + caAddress.length);
+    
+    // Create the highlighted span for the CA with position:relative
+    const highlightSpan = document.createElement('span');
+    highlightSpan.className = 'bitbot-ca-highlight';
+    highlightSpan.textContent = caAddress;
+    highlightSpan.setAttribute('data-address', caAddress); // Add address as data attribute for later lookup
+    highlightSpan.style.cssText = 'color: #FFCD01; font-weight: bold; text-decoration: underline; position: relative; display: inline-block; padding-right: 60px;'; // Add padding for button
+    
+    // Create and add Bitbot button using the extracted function
+    const button = injectAmpUi(caAddress);
     highlightSpan.appendChild(button);
     
     // Replace the original text node with our highlighted version
@@ -1081,54 +1087,11 @@ function injectDetectorCode() {
     // Store the original address for reference
     linkElement.setAttribute('data-address', caAddress);
     linkElement.setAttribute('data-bitbot-found-ca', 'true');
+    linkElement.style.cssText = 'color: #FFCD01; font-weight: bold; text-decoration: underline;';
     
-    // Create Bitbot button with absolute positioning
-    const button = document.createElement('button');
-    button.className = 'bitbot-ca-button';
-    button.style.cssText = 'position: absolute; right: -60px; top: 50%; transform: translateY(-50%); background: linear-gradient(45deg, #ff8c00, #ff6347); color: white; border: none; border-radius: 4px; padding: 1px 4px; font-size: 10px; cursor: pointer; display: inline-flex; align-items: center; z-index: 9999;';
-    
-    // Create icon for button
-    let iconElement;
-    
-    try {
-      // Try to create image element with SVG icon
-      const icon = document.createElement('img');
-      icon.src = BITBOT_ICON_URL;
-      icon.alt = 'Bitbot';
-      icon.style.cssText = 'height: 12px; width: 12px; margin-right: 2px;';
-      icon.onerror = () => {
-        // If icon fails to load, replace with a simple circle
-        const fallbackIcon = document.createElement('span');
-        fallbackIcon.style.cssText = 'display: inline-block; width: 8px; height: 8px; background-color: white; border-radius: 50%; margin-right: 3px;';
-        button.replaceChild(fallbackIcon, icon);
-      };
-      iconElement = icon;
-    } catch (e) {
-      // Fallback to a simple circle if the icon creation fails
-      const fallbackIcon = document.createElement('span');
-      fallbackIcon.style.cssText = 'display: inline-block; width: 8px; height: 8px; background-color: white; border-radius: 50%; margin-right: 3px;';
-      iconElement = fallbackIcon;
-    }
-    
-    // Add text to button
-    const buttonText = document.createTextNode('Bitbot');
-    
-    // Assemble button
-    button.appendChild(iconElement);
-    button.appendChild(buttonText);
-    
-    // Add event handler to button
-    button.addEventListener('click', (e) => {
-      e.preventDefault();
-      e.stopPropagation();
-      
-      // Trigger the same action as when the CA is detected
-      chrome.runtime.sendMessage({
-        action: 'caDetected',
-        contractAddress: caAddress,
-        url: window.location.href
-      });
-    });
+    // Customize the button's style for link elements
+    const button = injectAmpUi(caAddress);
+    button.style.right = '-60px'; // Override the right position for links
     
     // Append the button directly to the link element for absolute positioning
     linkElement.appendChild(button);

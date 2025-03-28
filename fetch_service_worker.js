@@ -78,6 +78,20 @@ const sidePanelUrls = new Set();
 // Track the last token we've detected to avoid redundant searches
 let lastDetectedToken = null;
 
+chrome.webRequest.onErrorOccurred.addListener(
+  function(details) {
+    console.error('webRequest.onErrorOccurred', details);
+  },
+  {urls:
+    [
+      "*://*.twitter.com/*",
+      "*://*.x.com/*",
+      "*://*.gmgn.ai/*",
+      "*://*.cloudflare.com/*"
+    ]
+  }
+);
+
 // Listen for extension icon clicks
 chrome.action.onClicked.addListener((tab) => {
   console.log('Extension icon clicked, opening side panel');

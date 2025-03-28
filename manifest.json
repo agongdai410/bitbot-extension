@@ -11,7 +11,9 @@
     "activeTab",
     "storage",
     "scripting",
-    "sidePanel.open"
+    "sidePanel.open",
+    "webRequest",
+    "webRequestBlocking"
   ],
   "host_permissions": [
     "*://*.twitter.com/*",

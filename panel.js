@@ -254,9 +254,6 @@ document.addEventListener('DOMContentLoaded', () => {
     showFailedToLoadNotification(false); // Hide failed notification on new load attempt
     showNotification(loadingMessage, false);
       
-    // Add a MutationObserver to detect browser error pages
-    let errorDetectionObserver;
-    
     try {
       // Pre-notify service worker about the upcoming navigation
       await notifyServiceWorkerAndWait(url, iframeId);
@@ -269,43 +266,6 @@ document.addEventListener('DOMContentLoaded', () => {
       // Set iframe source
       iframe.src = urlWithCacheBuster;
       console.log(`Setting iframe source for ${iframeId} to: ${urlWithCacheBuster}`);
-      try {
-        errorDetectionObserver = new MutationObserver((mutations) => {
-          // Check if browser has injected its error page
-          if (iframe.contentDocument) {
-            const errorText = iframe.contentDocument.body?.innerText || '';
-            if (errorText.includes('unexpectedly closed the connection') || 
-                errorText.includes('refused to connect') ||
-                errorText.includes('ERR_CONNECTION_') ||
-                errorText.includes('failed to load')) {
-              console.log(`Detected browser error page in ${iframeId} iframe:`, errorText);
-              // Clear the observer since we found an error
-              errorDetectionObserver.disconnect();
-              // Show our custom error notification instead
-              showFailedToLoadNotification(true);
-              showLoading(false);
-            }
-          }
-        });
-        
-        // Start observing with a delay to allow iframe to start loading
-        setTimeout(() => {
-          try {
-            if (iframe.contentDocument) {
-              errorDetectionObserver.observe(iframe.contentDocument, { 
-                childList: true, 
-                subtree: true, 
-                characterData: true 
-              });
-            }
-          } catch (e) {
-            // CORS may prevent access to contentDocument
-            console.log('Could not set up error detection due to CORS');
-          }
-        }, 100);
-      } catch (e) {
-        console.log('Error setting up error detection:', e);
-      }
       
       // Set up load event for this attempt
       const loadPromise = new Promise((resolve, reject) => {
@@ -321,6 +281,7 @@ document.addEventListener('DOMContentLoaded', () => {
         };
         
         const handleError = (event) => {
+          console.error('loadPromise handleError', event);
           clearTimeout(loadTimeout);
           iframe.removeEventListener('load', handleLoad);
           iframe.removeEventListener('error', handleError);
@@ -332,6 +293,14 @@ document.addEventListener('DOMContentLoaded', () => {
       });
       
       await loadPromise;
+
+      console.error('iframe.contentDocument', iframe.contentDocument);
+
+      // if (!iframe.contentDocument) {
+      //   console.error('iframe.contentDocument is null');
+      //   throw new Error('Unexpectedly closed the connection.');
+      // }
+
       console.log(`Successfully loaded ${url}`);
       
       // Mark iframe as loaded
@@ -352,11 +321,6 @@ document.addEventListener('DOMContentLoaded', () => {
     } catch (error) {
       console.warn(`Load attempt ${attempt} for ${url} failed:`, error);
       
-      // Clean up error detection observer if it exists
-      if (errorDetectionObserver) {
-        errorDetectionObserver.disconnect();
-      }
-      
       // Check if this is a connection error
       const isConnectionError = 
         error.message.includes('timeout') || 
@@ -364,6 +328,7 @@ document.addEventListener('DOMContentLoaded', () => {
         error.message.includes('network');
 
       if (isConnectionError) {
+        iframe.src = 'about:blank';
         showFailedToLoadNotification(true);
       }
       
