@@ -1226,6 +1226,10 @@ function injectDetectorCode() {
       window.open(`https://t.me/test_newbitbot?start=trade-${caAddress}`, '_blank');
     });
     
+    // Create first divider
+    const divider1 = document.createElement('div');
+    divider1.style.cssText = 'height: 9px; width: 1px; background-color: rgba(255,255,255,0.08);';
+    
     // Second child div - Chart button
     const chartDiv = document.createElement('div');
     chartDiv.style.cssText = 'height: 28px; width: 36px; display: flex; justify-content: center; align-items: center; cursor: pointer;';
@@ -1255,6 +1259,10 @@ function injectDetectorCode() {
       console.log('sendCaToApm:', caAddress);
       // sendCaToApm(caAddress); // Function will be implemented later
     });
+    
+    // Create second divider
+    const divider2 = document.createElement('div');
+    divider2.style.cssText = 'height: 9px; width: 1px; background-color: rgba(255,255,255,0.08);';
     
     // Third child div - Copy button
     const copyDiv = document.createElement('div');
@@ -1302,7 +1310,9 @@ function injectDetectorCode() {
     
     // Assemble the wrapper div with all child divs
     wrapper.appendChild(tradeDiv);
+    wrapper.appendChild(divider1);
     wrapper.appendChild(chartDiv);
+    wrapper.appendChild(divider2);
     wrapper.appendChild(copyDiv);
     
     return wrapper;
