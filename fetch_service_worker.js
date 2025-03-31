@@ -249,26 +249,50 @@ chrome.runtime.onMessage.addListener((message, sender, sendResponse) => {
     
     // Process the message
     clients.matchAll({ type: 'window' }).then((matchedClients) => {
-      console.log(`Found ${matchedClients.length} clients to forward runtime CA message to`);
+      console.log(`Found ${matchedClients.length} clients to forward CA_DETECTED_ON_X message to`);
       
-      matchedClients.forEach((client) => {
+      for (const client of matchedClients) {
+        console.log('Forwarding CA message to client:', client.url);
         client.postMessage({
           type: 'CA_DETECTED_ON_X',
           contractAddress: message.contractAddress,
-          sourceUrl: message.url
+          sourceUrl: message.url || sender.url
         });
-      });
-      
-      // Send response
-      sendResponse({ success: true });
+      }
     }).catch(error => {
-      console.error('Error processing runtime CA message:', error);
-      sendResponse({ success: false, error: error.message });
+      console.error('Error forwarding CA_DETECTED_ON_X message:', error);
     });
     
-    // Return true to indicate we'll send a response asynchronously
+    // Send response
+    sendResponse({ received: true });
     return true;
   }
+  else if (message && message.action === 'gmgnCADetected') {
+    console.log('Runtime message about CA detection on GMGN.ai:', message);
+    
+    // Process the message
+    clients.matchAll({ type: 'window' }).then((matchedClients) => {
+      console.log(`Found ${matchedClients.length} clients to forward gmgnCADetected message to`);
+      
+      for (const client of matchedClients) {
+        console.log('Forwarding GMGN CA message to client:', client.url);
+        client.postMessage({
+          type: 'CA_DETECTED_ON_GMGN_URL',
+          contractAddress: message.contractAddress,
+          gmgnUrl: message.url || sender.url
+        });
+      }
+    }).catch(error => {
+      console.error('Error forwarding gmgnCADetected message:', error);
+    });
+    
+    // Send response
+    sendResponse({ received: true });
+    return true;
+  }
+  
+  // For other messages
+  return false;
 });
 
 // Function to detect Cloudflare-protected sites

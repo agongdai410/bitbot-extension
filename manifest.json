@@ -13,7 +13,8 @@
     "scripting",
     "sidePanel.open",
     "webRequest",
-    "webRequestBlocking"
+    "webRequestBlocking",
+    "clipboardWrite"
   ],
   "host_permissions": [
     "*://*.twitter.com/*",
@@ -27,6 +28,13 @@
   "background": {
     "service_worker": "fetch_service_worker.js"
   },
+  "content_scripts": [
+    {
+      "matches": ["*://*.gmgn.ai/*"],
+      "js": ["gmgn_injected_js.js"],
+      "run_at": "document_end"
+    }
+  ],
   "content_security_policy": {
     "extension_pages": "script-src 'self'; object-src 'self'; frame-src *"
   },
