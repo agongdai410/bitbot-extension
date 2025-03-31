@@ -13,6 +13,7 @@ class TabDetector {
     this.detectorsInjected = false;
     this.lastDetectedCA = null;
     this.detectedCAs = new Set();
+    this.detectorDisabled = false;
   }
   
   // Inject the content script into the tab
@@ -29,6 +30,7 @@ class TabDetector {
       });
       
       this.detectorsInjected = true;
+      this.detectorDisabled = false;
       console.log(`Successfully injected CA detector into tab ${this.tabId}`);
       
     } catch (error) {
@@ -139,7 +141,9 @@ async function enforceScanWhenTabUpdated() {
       // Force a scan when visibility changes
       if (detector && detector.detectorsInjected) {
         setTimeout(() => {
-          chrome.tabs.sendMessage(activeTabId, { action: 'forceScan' });
+          if (!detector.detectorDisabled) {
+            chrome.tabs.sendMessage(activeTabId, { action: 'forceScan' });
+          }
         }, 500);
       }
     }
@@ -159,6 +163,11 @@ async function initialize() {
       await enforceScanWhenTabUpdated();
     }
   });
+
+  // Handle extension unload
+  window.addEventListener('beforeunload', () => {
+    chrome.tabs.sendMessage(activeTabId, { action: 'disabled' });
+  });
 }
 
 // Content script to be injected into the Twitter page (this will be stringified and injected)
@@ -168,7 +177,6 @@ function injectDetectorCode() {
   
   // Store state variables for CA detection
   let lastProcessedCA = null;
-  let isScrolling = false;
   let scrollTimeout = null;
   let lastScrollY = window.scrollY;
   let scrollDirection = 'down'; // Track scroll direction
@@ -177,18 +185,19 @@ function injectDetectorCode() {
   let lastCASelectionTime = 0;
   const CA_SELECTION_COOLDOWN = 300; // ms to wait before selecting a new CA
   
-  // Track currently highlighted CAs
-  const highlightedCAs = new Map(); // Map of address -> element reference
-  
   // Regular expression to match Solana contract addresses
   const CA_REGEX = /^[1-9A-HJ-NP-Za-km-z]{43,44}$/;
   
-  // Get extension URL for the SVG icon
-  const BITBOT_ICON_URL = chrome.runtime.getURL('icons/bitbot.svg');
-  
   // Log function that sends logs to the panel context
   function logToPanel(message) {
-    chrome.runtime.sendMessage({ action: 'log', message });
+    try {
+      chrome.runtime.sendMessage({ action: 'log', message });
+    } catch (e) {
+      if (e.message.includes("Extension context invalidated")) {
+        removeAllHighlights();
+        this.detectorDisabled = true;
+      }
+    }
   }
   
   // Function to extract contract addresses from text content
@@ -543,6 +552,9 @@ function injectDetectorCode() {
     
     // First handle special case: links that contain partial CAs
     const linkCAs = scanLinksForPartialCAs() || [];
+    linkCAs.forEach(ca => {
+      highlightCAWithButton(ca);
+    });
     logToPanel(`Found ${linkCAs.length} potential CAs in links`);
     
     // Get the main element - focus our search on the main content area
@@ -634,25 +646,26 @@ function injectDetectorCode() {
       // Get the position relative to the viewport
       const rect = element.getBoundingClientRect();
       
-      // Only process elements that are actually visible on screen - strict visibility check
-      // Element must be substantially visible in the viewport (at least 50% of height or 50px minimum)
-      const visibleTop = Math.max(0, rect.top);
-      const visibleBottom = Math.min(window.innerHeight, rect.bottom);
-      const visibleHeight = Math.max(0, visibleBottom - visibleTop);
-      const elementHeight = rect.height;
+      // Check if this element is at least partially visible
+      const isPartiallyVisible = (rect.top < window.innerHeight && rect.bottom > 0);
       
-      // Ensure element is meaningfully visible: either 50% of its height is visible or at least 50px is visible
-      const isSubstantiallyVisible = 
-        (visibleHeight >= elementHeight * 0.5) || // At least 50% visible
-        (visibleHeight >= 50); // Or at least 50 pixels visible
+      // For extraction, we'll check all elements with CAs, not just visible ones
+      const text = element.textContent;
+      const addresses = extractContractAddresses(text);
       
-      if (visibleHeight > 0 && isSubstantiallyVisible) {
-        const text = element.textContent;
-        const addresses = extractContractAddresses(text);
-        
-        if (addresses.length > 0) {
-          addresses.forEach(address => {
-            // Calculate how much of the element is visible in the viewport (visibility score)
+      if (addresses.length > 0) {
+        addresses.forEach(address => {
+          // Check if this CA has already been highlighted
+          const isAlreadyHighlighted = mainElement.querySelector(`.bitbot-ca-text[data-address="${address}"]`) !== null;
+
+          if (!isAlreadyHighlighted) {
+            // Highlight all CAs with action B only (inject UI, no yellow/bold text)
+            highlightCAWithButton({ element, address, isLink: false });
+          }
+          
+          // Only add visible CAs to the textCAs array for potential current CA selection
+          if (isPartiallyVisible) {
+            // Calculate visibility metrics for selection
             const visibleTop = Math.max(0, rect.top);
             const visibleBottom = Math.min(window.innerHeight, rect.bottom);
             const visibleHeight = Math.max(0, visibleBottom - visibleTop);
@@ -668,10 +681,11 @@ function injectDetectorCode() {
               position: rect.top,
               visibleHeight: visibleHeight,
               centerDistance: centerDistance,
-              isLink: false // Add flag to identify this as NOT a link CA
+              isLink: false,
+              isAlreadyHighlighted: isAlreadyHighlighted
             });
-          });
-        }
+          }
+        });
       }
     });
     
@@ -860,10 +874,9 @@ function injectDetectorCode() {
     if (!isSameAsLastCA) {
       logToPanel(`Showing new CA: ${ca.address}`);
       
-      // Remove previous highlight if it exists
+      // If there was a previously selected CA, remove its highlight (action A - yellow/bold)
       if (lastProcessedCA) {
-        // Look for any previously highlighted spans and remove them
-        removeAllHighlights();
+        removeCurrentCAHighlight(lastProcessedCA);
       }
       
       // Update the last processed CA
@@ -872,14 +885,10 @@ function injectDetectorCode() {
       // Record the time when this CA was selected (for cooldown)
       lastCASelectionTime = Date.now();
       
-      // Highlight based on whether this is a link or text CA
-      if (ca.isLink) {
-        highlightLinkWithCA(ca.element, ca.address);
-      } else {
-        highlightCAText(ca.element, ca.address);
-      }
+      // Apply highlight to the current CA (action A - yellow/bold)
+      applyCurrentCAHighlight(ca);
       
-      // Send message to the extension
+      // Send message to the extension to load the gmgn.ai page
       try {
         chrome.runtime.sendMessage({
           action: 'caDetected',
@@ -893,7 +902,210 @@ function injectDetectorCode() {
       logToPanel('CA is the same as the last processed one, not sending again');
     }
   }
-  
+
+  // New function to apply action A (yellow/bold highlight) to the current CA
+  function applyCurrentCAHighlight(ca) {
+    if (!ca) return;
+
+    try {
+      if (ca.isLink) {
+        // For links, find the link element and apply highlighting
+        const linkElement = ca.element;
+        if (linkElement) {
+          linkElement.classList.add('bitbot-ca-current');
+          linkElement.style.color = '#FFCD01';
+          linkElement.style.fontWeight = 'bold';
+          linkElement.style.textDecoration = 'underline';
+        }
+      } else {
+        // For text CAs, find the span containing the CA text
+        const caTextSpan = findCATextSpan(ca.element, ca.address);
+        if (caTextSpan) {
+          caTextSpan.classList.add('bitbot-ca-current');
+          caTextSpan.style.color = '#FFCD01';
+          caTextSpan.style.fontWeight = 'bold';
+          caTextSpan.style.textDecoration = 'underline';
+        }
+      }
+    } catch (e) {
+      logToPanel(`Error applying current CA highlight: ${e.message}`);
+    }
+  }
+
+  // New function to remove action A (yellow/bold highlight) from the previous current CA
+  function removeCurrentCAHighlight(ca) {
+    if (!ca) return;
+
+    try {
+      if (ca.isLink) {
+        // For links, find the link element and remove highlighting
+        const linkElement = ca.element;
+        if (linkElement) {
+          linkElement.classList.remove('bitbot-ca-current');
+          linkElement.style.color = '';
+          linkElement.style.fontWeight = '';
+          linkElement.style.textDecoration = '';
+        }
+      } else {
+        // For text CAs, find the span containing the CA text
+        const caTextSpan = findCATextSpan(ca.element, ca.address);
+        if (caTextSpan) {
+          caTextSpan.classList.remove('bitbot-ca-current');
+          caTextSpan.style.color = '';
+          caTextSpan.style.fontWeight = '';
+          caTextSpan.style.textDecoration = '';
+        }
+      }
+    } catch (e) {
+      logToPanel(`Error removing current CA highlight: ${e.message}`);
+    }
+  }
+
+  // Helper function to find the text span for a CA
+  function findCATextSpan(element, address) {
+    if (!element || !address) return null;
+
+    if (element.classList.contains('bitbot-ca-text') && element.getAttribute('data-address') === address) {
+      return element;
+    }
+    
+    // Try to find by data-address attribute first
+    let span = element.querySelector(`.bitbot-ca-text[data-address="${address}"]`);
+    
+    // If not found, try to find by text content
+    if (!span) {
+      const spans = element.querySelectorAll('.bitbot-ca-text');
+      for (const s of spans) {
+        if (s.textContent === address) {
+          span = s;
+          break;
+        }
+      }
+    }
+    
+    return span;
+  }
+
+  // New function to highlight CA with button only (action B)
+  function highlightCAWithButton(ca) {
+    if (ca.isLink) {
+      // For link elements
+      highlightLinkWithButton(ca.element, ca.address);
+    } else {
+      // For text elements
+      highlightTextWithButton(ca.element, ca.address);
+    }
+  }
+
+  // For text elements - only add the button, no text styling
+  function highlightTextWithButton(element, caAddress) {
+    // Find the text node containing the CA
+    const walker = document.createTreeWalker(
+      element, 
+      NodeFilter.SHOW_TEXT,
+      { acceptNode: node => node.textContent.includes(caAddress) ? NodeFilter.FILTER_ACCEPT : NodeFilter.FILTER_REJECT }
+    );
+    
+    const textNode = walker.nextNode();
+    if (!textNode) {
+      logToPanel('Could not find text node containing CA');
+      return;
+    }
+    
+    // Get the text content and index of the CA
+    const text = textNode.textContent;
+    const caIndex = text.indexOf(caAddress);
+    
+    if (caIndex === -1) {
+      logToPanel('Could not find CA in text node');
+      return;
+    }
+    
+    // Split the text node into before, CA, and after parts
+    const beforeText = text.substring(0, caIndex);
+    const afterText = text.substring(caIndex + caAddress.length);
+    
+    // Create the outer wrapper span with flex layout
+    const highlightSpan = document.createElement('span');
+    highlightSpan.className = 'bitbot-ca-highlight';
+    highlightSpan.setAttribute('data-address', caAddress);
+    highlightSpan.style.cssText = 'display:inline-flex; flex-wrap: wrap; line-height: 2; align-items: center; position: relative;';
+    
+    // Create inner span for the CA text (without applying yellow/bold styling yet)
+    const caTextSpan = document.createElement('span');
+    caTextSpan.className = 'bitbot-ca-text';
+    caTextSpan.setAttribute('data-address', caAddress);
+    caTextSpan.textContent = caAddress;
+    caTextSpan.style.cssText = ''; // No styling initially
+    
+    // Add the CA text span to the wrapper span
+    highlightSpan.appendChild(caTextSpan);
+    
+    // Create and add Bitbot button using the extracted function
+    const button = injectAmpUi(caAddress);
+    highlightSpan.appendChild(button);
+    
+    // Replace the original text node with our highlighted version
+    const parent = textNode.parentNode;
+    
+    // Create text nodes for before and after parts
+    const beforeNode = document.createTextNode(beforeText);
+    const afterNode = document.createTextNode(afterText);
+    
+    // Replace the original node with our three parts
+    parent.replaceChild(afterNode, textNode);
+    parent.insertBefore(highlightSpan, afterNode);
+    parent.insertBefore(beforeNode, highlightSpan);
+    
+    // Mark the element as processed
+    element.setAttribute('data-bitbot-found-ca', 'true');
+    
+    logToPanel('Successfully highlighted CA text with button only');
+  }
+
+  // For link elements - only add the button, no text styling
+  function highlightLinkWithButton(linkElement, caAddress) {
+    // First, check if this link already has a Bitbot button
+    if (linkElement.querySelector('.bitbot-ca-button')) {
+      return; // Already has a button
+    }
+    
+    // Check if the link is already wrapped
+    if (linkElement.parentNode && linkElement.parentNode.classList.contains('bitbot-ca-link-wrapper')) {
+      return; // Already wrapped
+    }
+    
+    // Since we're using absolute positioning, we need to create a wrapper if the link isn't already positioned
+    const currentPosition = window.getComputedStyle(linkElement).position;
+    if (currentPosition === 'static') {
+      linkElement.style.position = 'relative';
+    }
+    
+    // Add a special class for identification
+    linkElement.classList.add('bitbot-ca-link-highlight');
+    
+    // Store the original address for reference
+    linkElement.setAttribute('data-address', caAddress);
+    linkElement.setAttribute('data-bitbot-found-ca', 'true');
+    
+    // Create a wrapper element
+    const wrapper = document.createElement('div');
+    wrapper.className = 'bitbot-ca-link-wrapper';
+    wrapper.style.cssText = 'display: inline-flex; flex-wrap: wrap; line-height: 2; align-items: center; gap: 8px;';
+    
+    // Insert the wrapper into the DOM in place of the linkElement
+    linkElement.parentNode.insertBefore(wrapper, linkElement);
+    
+    // Move the linkElement into the wrapper
+    wrapper.appendChild(linkElement);
+    
+    // Create and add button to the wrapper (not the link)
+    const button = injectAmpUi(caAddress);
+    wrapper.appendChild(button);
+    
+    logToPanel('Successfully highlighted link with button only');
+  }
+
   // Helper function to remove all highlight spans
   function removeAllHighlights() {
     // Regular text highlights
@@ -937,12 +1149,16 @@ function injectDetectorCode() {
           // Restore original link styling
           link.style.position = '';
           link.classList.remove('bitbot-ca-link-highlight');
+          link.classList.remove('bitbot-ca-current');
+          link.style.color = '';
+          link.style.fontWeight = '';
+          link.style.textDecoration = '';
           
           // Remove data attributes so the link can be re-processed
           link.removeAttribute('data-bitbot-found-ca');
           link.removeAttribute('data-address');
           
-          // Remove any buttons that might be directly inside the link (shouldn't be there with the new approach)
+          // Remove any buttons that might be directly inside the link
           const elements = link.querySelectorAll('.bitbot-ca-button');
           elements.forEach(el => el.parentNode.removeChild(el));
           
@@ -968,7 +1184,7 @@ function injectDetectorCode() {
       }
     });
   }
-  
+
   // Function to create and inject the APM UI for a contract address
   function injectAmpUi(caAddress) {
     // Create wrapper div
@@ -1092,125 +1308,6 @@ function injectDetectorCode() {
     return wrapper;
   }
   
-  // Function to highlight the specific CA text within an element
-  function highlightCAText(element, caAddress) {
-    // Find the text node containing the CA
-    const walker = document.createTreeWalker(
-      element, 
-      NodeFilter.SHOW_TEXT,
-      { acceptNode: node => node.textContent.includes(caAddress) ? NodeFilter.FILTER_ACCEPT : NodeFilter.FILTER_REJECT }
-    );
-    
-    const textNode = walker.nextNode();
-    if (!textNode) {
-      logToPanel('Could not find text node containing CA');
-      return;
-    }
-    
-    // Get the text content and index of the CA
-    const text = textNode.textContent;
-    const caIndex = text.indexOf(caAddress);
-    
-    if (caIndex === -1) {
-      logToPanel('Could not find CA in text node');
-      return;
-    }
-    
-    // Split the text node into before, CA, and after parts
-    const beforeText = text.substring(0, caIndex);
-    const afterText = text.substring(caIndex + caAddress.length);
-    
-    // Create the outer wrapper span with flex layout
-    const highlightSpan = document.createElement('span');
-    highlightSpan.className = 'bitbot-ca-highlight';
-    highlightSpan.setAttribute('data-address', caAddress); // Add address as data attribute for later lookup
-    highlightSpan.style.cssText = 'display:inline-flex; flex-wrap: wrap; line-height: 2; align-items: center; position: relative;';
-    
-    // Create inner span specifically for the CA text with styling
-    const caTextSpan = document.createElement('span');
-    caTextSpan.className = 'bitbot-ca-text';
-    caTextSpan.textContent = caAddress;
-    caTextSpan.style.cssText = 'color: #FFCD01; font-weight: bold; text-decoration: underline;';
-    
-    // Add the CA text span to the wrapper span
-    highlightSpan.appendChild(caTextSpan);
-    
-    // Create and add Bitbot button using the extracted function
-    const button = injectAmpUi(caAddress);
-    highlightSpan.appendChild(button);
-    
-    // Replace the original text node with our highlighted version
-    const parent = textNode.parentNode;
-    
-    // Create text nodes for before and after parts
-    const beforeNode = document.createTextNode(beforeText);
-    const afterNode = document.createTextNode(afterText);
-    
-    // Replace the original node with our three parts
-    parent.replaceChild(afterNode, textNode);
-    parent.insertBefore(highlightSpan, afterNode);
-    parent.insertBefore(beforeNode, highlightSpan);
-    
-    logToPanel('Successfully highlighted CA text with inner span and button');
-  }
-  
-  // Function to highlight a link element containing a CA
-  function highlightLinkWithCA(linkElement, caAddress) {
-    // First, check if this link already has a Bitbot button and remove it
-    // Look for buttons immediately after this link
-    let nextNode = linkElement.nextSibling;
-    while (nextNode) {
-      if (nextNode.classList && nextNode.classList.contains('bitbot-ca-button')) {
-        // Remove existing button
-        nextNode.parentNode.removeChild(nextNode);
-        // Start over since removing changes the DOM
-        nextNode = linkElement.nextSibling;
-      } else {
-        // Move to next sibling
-        nextNode = nextNode.nextSibling;
-      }
-    }
-    
-    // Check if the link is already wrapped
-    if (linkElement.parentNode && linkElement.parentNode.classList.contains('bitbot-ca-link-wrapper')) {
-      // Remove the existing wrapper and put the link back in place
-      const wrapper = linkElement.parentNode;
-      wrapper.parentNode.insertBefore(linkElement, wrapper);
-      wrapper.parentNode.removeChild(wrapper);
-    }
-    
-    // Since we're using absolute positioning, we need to create a wrapper if the link isn't already positioned
-    const currentPosition = window.getComputedStyle(linkElement).position;
-    if (currentPosition === 'static') {
-      linkElement.style.position = 'relative';
-    }
-    
-    // Add a special class for styling
-    linkElement.classList.add('bitbot-ca-link-highlight');
-    
-    // Store the original address for reference
-    linkElement.setAttribute('data-address', caAddress);
-    linkElement.setAttribute('data-bitbot-found-ca', 'true');
-    linkElement.style.cssText = 'color: #FFCD01; font-weight: bold; text-decoration: underline;';
-    
-    // Create a wrapper element
-    const wrapper = document.createElement('div');
-    wrapper.className = 'bitbot-ca-link-wrapper';
-    wrapper.style.cssText = 'display: inline-flex; flex-wrap: wrap; line-height: 2; align-items: center; gap: 8px;';
-    
-    // Insert the wrapper into the DOM in place of the linkElement
-    linkElement.parentNode.insertBefore(wrapper, linkElement);
-    
-    // Move the linkElement into the wrapper
-    wrapper.appendChild(linkElement);
-    
-    // Create and add button to the wrapper (not the link)
-    const button = injectAmpUi(caAddress);
-    wrapper.appendChild(button);
-    
-    logToPanel('Successfully highlighted link element with a wrapper and button');
-  }
-  
   // Set up scroll event listener
   function setupScrollListener() {
     logToPanel('Setting up scroll listener');
@@ -1282,9 +1379,17 @@ function injectDetectorCode() {
   
   // Listen for messages from the panel script
   chrome.runtime.onMessage.addListener((message, sender, sendResponse) => {
+    if (this.detectorDisabled) {
+      return;
+    }
     if (message.action === 'checkForCAs') {
       scanForContractAddresses();
       sendResponse({ scanning: true });
+    }
+    else if (message.action === 'disabled') {
+      // Called when extension is disabled/unloaded
+      removeAllHighlights();
+      sendResponse({ cleaned: true });
     }
     else if (message.action === 'forceScan') {
       // Check for override flag in the message
@@ -1307,28 +1412,22 @@ function injectDetectorCode() {
       executeForceScan();
       sendResponse({ scanning: true });
     }
+    else if (message.action === 'cleanup') {
+      // Called when extension is disabled/unloaded
+      removeAllHighlights();
+      sendResponse({ cleaned: true });
+    }
     
     // Helper function to execute a force scan
     function executeForceScan() {
-      // Remove any previous CA highlights
-      removeAllHighlights();
-      
-      // Clear the tracked highlights
-      highlightedCAs.clear();
-      
-      // Reset lastProcessedCA to ensure we find the topmost CA again
-      lastProcessedCA = null;
-      
-      // Clear the data-bitbot-found-ca attribute from elements
-      document.querySelectorAll('[data-bitbot-found-ca]').forEach(el => {
-        el.removeAttribute('data-bitbot-found-ca');
-        el.removeAttribute('data-address');
-      });
-      
-      // Ensure no stray buttons remain
-      document.querySelectorAll('.bitbot-ca-button').forEach(btn => {
-        btn.parentNode.removeChild(btn);
-      });
+      if (this.detectorDisabled) {
+        return;
+      }
+      // Reset the current selection, but don't remove all highlights
+      if (lastProcessedCA) {
+        removeCurrentCAHighlight(lastProcessedCA);
+        lastProcessedCA = null;
+      }
       
       logToPanel('Forced scan triggered, searching for CAs from the top');
       
@@ -1369,7 +1468,7 @@ function injectDetectorCode() {
     // Return true for async responses
     return true;
   });
-  
+
   // Initialize the detector
   function initialize() {
     logToPanel('CA detector initialized in page context');
