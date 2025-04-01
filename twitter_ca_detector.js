@@ -903,7 +903,7 @@ function injectDetectorCode() {
     }
   }
 
-  // New function to apply action A (yellow/bold highlight) to the current CA
+  // Function to apply action A (yellow/bold highlight) to the current CA
   function applyCurrentCAHighlight(ca) {
     if (!ca) return;
 
@@ -914,8 +914,17 @@ function injectDetectorCode() {
         if (linkElement) {
           linkElement.classList.add('bitbot-ca-current');
           linkElement.style.color = '#FFCD01';
-          linkElement.style.fontWeight = 'bold';
-          linkElement.style.textDecoration = 'underline';
+          linkElement.style.fontWeight = '600';
+          linkElement.style.textDecoration = 'none';
+          
+          // Find the associated bitbot UI and highlight its chart button
+          const buttonContainer = linkElement.parentElement.querySelector('.bitbot-ca-button');
+          if (buttonContainer) {
+            const chartDiv = buttonContainer.children[2]; // The chart button is the 3rd child (index 2)
+            if (chartDiv) {
+              chartDiv.style.background = 'rgba(255,255,255,0.16)';
+            }
+          }
         }
       } else {
         // For text CAs, find the span containing the CA text
@@ -923,8 +932,17 @@ function injectDetectorCode() {
         if (caTextSpan) {
           caTextSpan.classList.add('bitbot-ca-current');
           caTextSpan.style.color = '#FFCD01';
-          caTextSpan.style.fontWeight = 'bold';
-          caTextSpan.style.textDecoration = 'underline';
+          caTextSpan.style.fontWeight = '600';
+          caTextSpan.style.textDecoration = 'none';
+          
+          // Find the associated bitbot UI and highlight its chart button
+          const buttonContainer = ca.element.parentElement.querySelector('.bitbot-ca-button');
+          if (buttonContainer) {
+            const chartDiv = buttonContainer.children[2]; // The chart button is the 3rd child (index 2)
+            if (chartDiv) {
+              chartDiv.style.background = 'rgba(255,255,255,0.16)';
+            }
+          }
         }
       }
     } catch (e) {
@@ -932,7 +950,7 @@ function injectDetectorCode() {
     }
   }
 
-  // New function to remove action A (yellow/bold highlight) from the previous current CA
+  // Function to remove action A (yellow/bold highlight) from the previous current CA
   function removeCurrentCAHighlight(ca) {
     if (!ca) return;
 
@@ -945,6 +963,15 @@ function injectDetectorCode() {
           linkElement.style.color = '';
           linkElement.style.fontWeight = '';
           linkElement.style.textDecoration = '';
+          
+          // Find the associated bitbot UI and remove chart button highlight
+          const buttonContainer = linkElement.querySelector('.bitbot-ca-button');
+          if (buttonContainer) {
+            const chartDiv = buttonContainer.children[2]; // The chart button is the 3rd child (index 2)
+            if (chartDiv) {
+              chartDiv.style.background = 'transparent';
+            }
+          }
         }
       } else {
         // For text CAs, find the span containing the CA text
@@ -954,6 +981,15 @@ function injectDetectorCode() {
           caTextSpan.style.color = '';
           caTextSpan.style.fontWeight = '';
           caTextSpan.style.textDecoration = '';
+          
+          // Find the associated bitbot UI and remove chart button highlight
+          const buttonContainer = caTextSpan.querySelector('.bitbot-ca-button');
+          if (buttonContainer) {
+            const chartDiv = buttonContainer.children[2]; // The chart button is the 3rd child (index 2)
+            if (chartDiv) {
+              chartDiv.style.background = 'transparent';
+            }
+          }
         }
       }
     } catch (e) {
@@ -1239,7 +1275,10 @@ function injectDetectorCode() {
       chartDiv.style.background = 'rgba(255,255,255,0.16)';
     });
     chartDiv.addEventListener('mouseout', () => {
-      chartDiv.style.background = 'transparent';
+      const isActive = wrapper.parentElement.querySelector('.bitbot-ca-current');
+      if (!isActive) {
+        chartDiv.style.background = 'transparent';
+      }
     });
     
     // Add chart icon
