@@ -396,3 +396,15 @@ iframe.active {
   font-size: 16px;
   box-shadow: 0px -4px 0px 0px #121212 inset;
 }
+
+#trade-button:hover {
+  opacity: 0.8;
+}
+
+#trade-button:active {
+  background: linear-gradient(0deg, rgba(0, 0, 0, 0.3), rgba(0, 0, 0, 0.3));
+  box-shadow: 0px -3px 3px 0px #00000042;
+  box-shadow: 0px 0px 0px 10px #16161680;
+  box-shadow: 0px 0px 0px 9px #242424;
+  box-shadow: 0px 3px 3px 0px #FFFFFF1A;
+}
