@@ -33,6 +33,11 @@
       "matches": ["*://*.gmgn.ai/*"],
       "js": ["gmgn_injected_js.js"],
       "run_at": "document_end"
+    },
+    {
+      "matches": ["*://*.x.com/*", "*://*.twitter.com/*"],
+      "js": ["x_injected_js.js"],
+      "run_at": "document_end"
     }
   ],
   "content_security_policy": {
