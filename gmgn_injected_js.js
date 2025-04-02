@@ -58,7 +58,7 @@
   function addContractButton(contractAddress) {
     // Create the main button container
     const buttonContainer = document.createElement('div');
-    buttonContainer.className = 'bitbot-gmgn-button-container';
+    buttonContainer.className = 'apm-gmgn-button-container';
     buttonContainer.style.cssText = `
       display: flex;
       align-items: center;
@@ -205,14 +205,14 @@
         }
         
         // Check if we already added our button to avoid duplicates
-        const existingButton = document.querySelector('.bitbot-gmgn-button-container');
+        const existingButton = document.querySelector('.apm-gmgn-button-container');
         if (existingButton) {
           existingButton.remove();
         }
         
         // Append our button container to ampUiWrapper
         ampUiWrapper.appendChild(buttonContainer);
-        console.log('Successfully added BitBot button to GMGN.ai page at target location');
+        console.log('Successfully added APM button to GMGN.ai page at target location');
         return true;
       } catch (err) {
         console.error('Error inserting button to target location:', err);
@@ -242,7 +242,7 @@
         } else {
           console.warn('Failed to place button in target location after maximum retries');
           // Fall back to body append as a last resort
-          const existingButton = document.querySelector('.bitbot-gmgn-button-container');
+          const existingButton = document.querySelector('.apm-gmgn-button-container');
           if (!existingButton) {
             // Use fixed positioning as fallback
             buttonContainer.style.position = 'fixed';
@@ -250,7 +250,7 @@
             buttonContainer.style.right = '15px';
             buttonContainer.style.zIndex = '9999';
             document.body.appendChild(buttonContainer);
-            console.log('Added BitBot button to body as fallback');
+            console.log('Added APM button to body as fallback');
           }
         }
       };

@@ -261,7 +261,7 @@ document.addEventListener('DOMContentLoaded', () => {
     showNotification(loadingMessage, false);
 
     currentCa = extractContractAddress(url);
-    
+
     try {
       // Pre-notify service worker about the upcoming navigation
       await notifyServiceWorkerAndWait(url, iframeId);
@@ -603,7 +603,7 @@ document.addEventListener('DOMContentLoaded', () => {
     return `https://t.me/apmfun_bot${currentCa ? `?start=trade-${currentCa}_XXXXXX` : ''}`;
   }
   
-  // Trade button to open Bitbot in a new tab
+  // Trade button to open APM in a new tab
   const tradeButton = document.getElementById('trade-button');
   if (tradeButton) {
     tradeButton.addEventListener('click', () => {

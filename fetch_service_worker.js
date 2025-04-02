@@ -22,7 +22,7 @@ const TWITTER_DOMAINS = [
 ];
 
 // Constants
-const CACHE_NAME = 'bitbot-extension-cache-v1';
+const CACHE_NAME = 'apm-extension-cache-v1';
 const CACHE_DURATION = 60 * 60 * 1000; // 1 hour in milliseconds
 
 // Browser user agents

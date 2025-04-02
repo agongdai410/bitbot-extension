@@ -136,7 +136,7 @@
       
       // If the link already has a CA detected (special case for scrolling)
       // Extract that CA directly rather than re-scanning the link
-      if (link.hasAttribute('data-bitbot-found-ca') && link.hasAttribute('data-address')) {
+      if (link.hasAttribute('data-apm-found-ca') && link.hasAttribute('data-address')) {
         const caAddress = link.getAttribute('data-address');
         if (caAddress) {
           visibleCAs.push({
@@ -146,7 +146,7 @@
             visibleHeight: visibleHeight,
             centerDistance: centerDistance,
             isLink: true,
-            isAlreadyHighlighted: link.classList.contains('bitbot-ca-link-highlight')
+            isAlreadyHighlighted: link.classList.contains('apm-ca-link-highlight')
           });
           processedCount++;
           return;
@@ -183,7 +183,7 @@
         
         if (addresses.length > 0) {
           // Mark as having a found CA
-          link.setAttribute('data-bitbot-found-ca', 'true');
+          link.setAttribute('data-apm-found-ca', 'true');
           processedCount++;
           
           addresses.forEach(address => {
@@ -208,13 +208,13 @@
       }
       
       // If no direct CA found, attempt our URL extraction methods
-      if (!link.hasAttribute('data-bitbot-found-ca') && (href.includes('token/') || visibleText.includes('token/'))) {
+      if (!link.hasAttribute('data-apm-found-ca') && (href.includes('token/') || visibleText.includes('token/'))) {
         const cleanURL = extractCleanURL(link);
         const addresses = extractContractAddressesFromURL(cleanURL);
         
         if (addresses.length > 0) {
           // Mark as having a found CA
-          link.setAttribute('data-bitbot-found-ca', 'true');
+          link.setAttribute('data-apm-found-ca', 'true');
           processedCount++;
           
           addresses.forEach(address => {
@@ -423,7 +423,7 @@
           }
           
           // Skip if parent is already processed
-          if (node.parentElement && node.parentElement.hasAttribute('data-bitbot-found-ca')) {
+          if (node.parentElement && node.parentElement.hasAttribute('data-apm-found-ca')) {
             return NodeFilter.FILTER_REJECT;
           }
           
@@ -460,7 +460,7 @@
       }
       
       // Skip elements where we already found a CA (not just processed elements)
-      if (el.hasAttribute('data-bitbot-found-ca')) {
+      if (el.hasAttribute('data-apm-found-ca')) {
         return false;
       }
       
@@ -495,7 +495,7 @@
       if (addresses.length > 0) {
         addresses.forEach(address => {
           // Check if this CA has already been highlighted
-          const isAlreadyHighlighted = mainElement.querySelector(`.bitbot-ca-text[data-address="${address}"]`) !== null;
+          const isAlreadyHighlighted = mainElement.querySelector(`.apm-ca-text[data-address="${address}"]`) !== null;
 
           if (!isAlreadyHighlighted) {
             // Highlight all CAs with action B only (inject UI, no yellow/bold text)
@@ -765,13 +765,13 @@
         // For links, find the link element and apply highlighting
         const linkElement = ca.element;
         if (linkElement) {
-          linkElement.classList.add('bitbot-ca-current');
+          linkElement.classList.add('apm-ca-current');
           linkElement.style.color = '#FFCD01';
           linkElement.style.fontWeight = '600';
           linkElement.style.textDecoration = 'underline';
           
-          // Find the associated bitbot UI and highlight its chart button
-          const buttonContainer = linkElement.parentElement.querySelector('.bitbot-ca-button');
+          // Find the associated apm UI and highlight its chart button
+          const buttonContainer = linkElement.parentElement.querySelector('.apm-ca-button');
           if (buttonContainer) {
             const chartDiv = buttonContainer.children[2]; // The chart button is the 3rd child (index 2)
             if (chartDiv) {
@@ -783,13 +783,13 @@
         // For text CAs, find the span containing the CA text
         const caTextSpan = findCATextSpan(ca.element, ca.address);
         if (caTextSpan) {
-          caTextSpan.classList.add('bitbot-ca-current');
+          caTextSpan.classList.add('apm-ca-current');
           caTextSpan.style.color = '#FFCD01';
           caTextSpan.style.fontWeight = '600';
           caTextSpan.style.textDecoration = 'underline';
           
-          // Find the associated bitbot UI and highlight its chart button
-          const buttonContainer = ca.element.parentElement.querySelector('.bitbot-ca-button');
+          // Find the associated apm UI and highlight its chart button
+          const buttonContainer = ca.element.parentElement.querySelector('.apm-ca-button');
           if (buttonContainer) {
             const chartDiv = buttonContainer.children[2]; // The chart button is the 3rd child (index 2)
             if (chartDiv) {
@@ -812,13 +812,13 @@
         // For links, find the link element and remove highlighting
         const linkElement = ca.element;
         if (linkElement) {
-          linkElement.classList.remove('bitbot-ca-current');
+          linkElement.classList.remove('apm-ca-current');
           linkElement.style.color = '';
           linkElement.style.fontWeight = '';
           linkElement.style.textDecoration = '';
           
-          // Find the associated bitbot UI and remove chart button highlight
-          const buttonContainer = linkElement.parentElement.querySelector('.bitbot-ca-button');
+          // Find the associated apm UI and remove chart button highlight
+          const buttonContainer = linkElement.parentElement.querySelector('.apm-ca-button');
           if (buttonContainer) {
             const chartDiv = buttonContainer.children[2]; // The chart button is the 3rd child (index 2)
             if (chartDiv) {
@@ -830,13 +830,13 @@
         // For text CAs, find the span containing the CA text
         const caTextSpan = findCATextSpan(ca.element, ca.address);
         if (caTextSpan) {
-          caTextSpan.classList.remove('bitbot-ca-current');
+          caTextSpan.classList.remove('apm-ca-current');
           caTextSpan.style.color = '';
           caTextSpan.style.fontWeight = '';
           caTextSpan.style.textDecoration = '';
           
-          // Find the associated bitbot UI and remove chart button highlight
-          const buttonContainer = caTextSpan.parentElement.querySelector('.bitbot-ca-button');
+          // Find the associated apm UI and remove chart button highlight
+          const buttonContainer = caTextSpan.parentElement.querySelector('.apm-ca-button');
           if (buttonContainer) {
             const chartDiv = buttonContainer.children[2]; // The chart button is the 3rd child (index 2)
             if (chartDiv) {
@@ -854,16 +854,16 @@
   function findCATextSpan(element, address) {
     if (!element || !address) return null;
 
-    if (element.classList.contains('bitbot-ca-text') && element.getAttribute('data-address') === address) {
+    if (element.classList.contains('apm-ca-text') && element.getAttribute('data-address') === address) {
       return element;
     }
     
     // Try to find by data-address attribute first
-    let span = element.querySelector(`.bitbot-ca-text[data-address="${address}"]`);
+    let span = element.querySelector(`.apm-ca-text[data-address="${address}"]`);
     
     // If not found, try to find by text content
     if (!span) {
-      const spans = element.querySelectorAll('.bitbot-ca-text');
+      const spans = element.querySelectorAll('.apm-ca-text');
       for (const s of spans) {
         if (s.textContent === address) {
           span = s;
@@ -916,13 +916,13 @@
     
     // Create the outer wrapper span with flex layout
     const highlightSpan = document.createElement('span');
-    highlightSpan.className = 'bitbot-ca-highlight';
+    highlightSpan.className = 'apm-ca-highlight';
     highlightSpan.setAttribute('data-address', caAddress);
     highlightSpan.style.cssText = 'display:inline-flex; flex-wrap: wrap; line-height: 2; align-items: center; position: relative;';
     
     // Create inner span for the CA text (without applying yellow/bold styling yet)
     const caTextSpan = document.createElement('span');
-    caTextSpan.className = 'bitbot-ca-text';
+    caTextSpan.className = 'apm-ca-text';
     caTextSpan.setAttribute('data-address', caAddress);
     caTextSpan.textContent = caAddress;
     caTextSpan.style.cssText = ''; // No styling initially
@@ -930,7 +930,7 @@
     // Add the CA text span to the wrapper span
     highlightSpan.appendChild(caTextSpan);
     
-    // Create and add Bitbot button using the extracted function
+    // Create and add APM button using the extracted function
     const button = injectAmpUi(caAddress, element, false);
     highlightSpan.appendChild(button);
     
@@ -947,20 +947,20 @@
     parent.insertBefore(beforeNode, highlightSpan);
     
     // Mark the element as processed
-    element.setAttribute('data-bitbot-found-ca', 'true');
+    element.setAttribute('data-apm-found-ca', 'true');
     
     logToPanel('Successfully highlighted CA text with button only');
   }
 
   // For link elements - only add the button, no text styling
   function highlightLinkWithButton(linkElement, caAddress) {
-    // First, check if this link already has a Bitbot button
-    if (linkElement.querySelector('.bitbot-ca-button')) {
+    // First, check if this link already has a APM button
+    if (linkElement.querySelector('.apm-ca-button')) {
       return; // Already has a button
     }
     
     // Check if the link is already wrapped
-    if (linkElement.parentNode && linkElement.parentNode.classList.contains('bitbot-ca-link-wrapper')) {
+    if (linkElement.parentNode && linkElement.parentNode.classList.contains('apm-ca-link-wrapper')) {
       return; // Already wrapped
     }
     
@@ -971,15 +971,15 @@
     }
     
     // Add a special class for identification
-    linkElement.classList.add('bitbot-ca-link-highlight');
+    linkElement.classList.add('apm-ca-link-highlight');
     
     // Store the original address for reference
     linkElement.setAttribute('data-address', caAddress);
-    linkElement.setAttribute('data-bitbot-found-ca', 'true');
+    linkElement.setAttribute('data-apm-found-ca', 'true');
     
     // Create a wrapper element
     const wrapper = document.createElement('div');
-    wrapper.className = 'bitbot-ca-link-wrapper';
+    wrapper.className = 'apm-ca-link-wrapper';
     wrapper.style.cssText = 'display: inline-flex; flex-wrap: wrap; line-height: 2; align-items: center; gap: 8px;';
     
     // Insert the wrapper into the DOM in place of the linkElement
@@ -998,19 +998,19 @@
   // Helper function to remove all highlight spans
   function removeAllHighlights() {
     // Regular text highlights
-    const highlightedSpans = document.querySelectorAll('.bitbot-ca-highlight');
+    const highlightedSpans = document.querySelectorAll('.apm-ca-highlight');
     highlightedSpans.forEach(span => {
       try {
         // Get the original CA text (without the UI elements)
         const caAddress = span.getAttribute('data-address');
         
         // First remove any buttons/divs inside the span
-        const elements = span.querySelectorAll('.bitbot-ca-button');
+        const elements = span.querySelectorAll('.apm-ca-button');
         elements.forEach(el => el.parentNode.removeChild(el));
         
         // Get the CA text from the inner span if it exists, or from the attribute
         let caText = caAddress;
-        const caTextSpan = span.querySelector('.bitbot-ca-text');
+        const caTextSpan = span.querySelector('.apm-ca-text');
         if (caTextSpan) {
           caText = caTextSpan.textContent || caAddress;
         }
@@ -1029,26 +1029,26 @@
     });
     
     // Link highlights with wrappers
-    const highlightWrappers = document.querySelectorAll('.bitbot-ca-link-wrapper');
+    const highlightWrappers = document.querySelectorAll('.apm-ca-link-wrapper');
     highlightWrappers.forEach(wrapper => {
       try {
         // Find the link inside the wrapper
-        const link = wrapper.querySelector('.bitbot-ca-link-highlight');
+        const link = wrapper.querySelector('.apm-ca-link-highlight');
         if (link) {
           // Restore original link styling
           link.style.position = '';
-          link.classList.remove('bitbot-ca-link-highlight');
-          link.classList.remove('bitbot-ca-current');
+          link.classList.remove('apm-ca-link-highlight');
+          link.classList.remove('apm-ca-current');
           link.style.color = '';
           link.style.fontWeight = '';
           link.style.textDecoration = '';
           
           // Remove data attributes so the link can be re-processed
-          link.removeAttribute('data-bitbot-found-ca');
+          link.removeAttribute('data-apm-found-ca');
           link.removeAttribute('data-address');
           
           // Remove any buttons that might be directly inside the link
-          const elements = link.querySelectorAll('.bitbot-ca-button');
+          const elements = link.querySelectorAll('.apm-ca-button');
           elements.forEach(el => el.parentNode.removeChild(el));
           
           // Move the link out of the wrapper back to its original position
@@ -1064,7 +1064,7 @@
     });
     
     // Clean up any orphaned UI elements that might remain outside of links/spans
-    const allElements = document.querySelectorAll('.bitbot-ca-button');
+    const allElements = document.querySelectorAll('.apm-ca-button');
     allElements.forEach(element => {
       try {
         element.parentNode.removeChild(element);
@@ -1078,7 +1078,7 @@
   function injectAmpUi(caAddress, element, isLink) {
     // Create wrapper div
     const wrapper = document.createElement('div');
-    wrapper.className = 'bitbot-ca-button'; // Keep the same class for compatibility
+    wrapper.className = 'apm-ca-button'; // Keep the same class for compatibility
     wrapper.style.cssText = 'height: 28px; background: #252525; border: 1px solid rgba(255,255,255,0.08); border-radius: 4px; padding: 0; display: inline-flex; align-items: center;';
     
     // First child div - Trade button
@@ -1128,7 +1128,7 @@
       chartDiv.style.background = 'rgba(255,255,255,0.16)';
     });
     chartDiv.addEventListener('mouseout', () => {
-      const isActive = wrapper.parentElement.querySelector('.bitbot-ca-current');
+      const isActive = wrapper.parentElement.querySelector('.apm-ca-current');
       if (!isActive) {
         chartDiv.style.background = 'transparent';
       }
