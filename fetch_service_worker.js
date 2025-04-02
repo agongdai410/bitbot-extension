@@ -226,7 +226,7 @@ self.addEventListener('message', async (event) => {
         client.postMessage({
           type: 'CA_DETECTED_ON_X',
           contractAddress: event.data.contractAddress,
-          sourceUrl: event.data.url
+          enforceRefresh: event.data.enforceRefresh || false
         });
       }
       
@@ -256,7 +256,7 @@ chrome.runtime.onMessage.addListener((message, sender, sendResponse) => {
         client.postMessage({
           type: 'CA_DETECTED_ON_X',
           contractAddress: message.contractAddress,
-          sourceUrl: message.url || sender.url
+          forceRefresh: message.forceRefresh || false,
         });
       }
     }).catch(error => {
@@ -265,6 +265,33 @@ chrome.runtime.onMessage.addListener((message, sender, sendResponse) => {
     
     // Send response
     sendResponse({ received: true });
+    return true;
+  }
+  else if (message && message.type === 'OPEN_APM_PANEL') {
+    console.log('Runtime message requesting to open APM panel:', message);
+    
+    // First determine the tab and window ID
+    chrome.tabs.query({ active: true, currentWindow: true }, (tabs) => {
+      if (!tabs || tabs.length === 0) {
+        console.error('No active tab found');
+        sendResponse({ received: true, error: 'No active tab found' });
+        return;
+      }
+      
+      const tab = tabs[0];
+      const windowId = tab.windowId;
+      
+      // Step 1: Open the side panel in the current window
+      chrome.sidePanel.open({ windowId: windowId }).then(() => {
+        console.log('Side panel opened successfully for window:', windowId);
+        sendResponse({ sidePanelOpened: true });
+      }).catch(error => {
+        console.error('Error processing OPEN_APM_PANEL message:', error);
+        sendResponse({ sidePanelOpened: false, error: error.message });
+      });
+    });
+    
+    // Return true to indicate we'll send an async response
     return true;
   }
   else if (message && message.action === 'gmgnCADetected') {

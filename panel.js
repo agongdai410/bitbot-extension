@@ -684,7 +684,8 @@ document.addEventListener('DOMContentLoaded', () => {
       showNotification(`Searching for ${event.data.tokenAddress.slice(0, 8)}... on X`, false);
     }
     else if (event.data.type === 'CA_DETECTED_ON_X') {
-      if (!settings.autoRefreshGmgn) {
+      console.log('CA_DETECTED_ON_X Received CA detected on X message:', event.data);
+      if (!settings.autoRefreshGmgn && !event.data.forceRefresh) {
         return;
       }
       const tabs = await chrome.tabs.query({active: true, currentWindow: true});

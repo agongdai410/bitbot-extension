@@ -538,13 +538,18 @@
     if (allVisibleCAs.length > 0) {
       findMostVisibleCA(allVisibleCAs);
     } else {
-      // Send message to panel that we're on X but no CA was found
-      // This will allow the panel to load the most recent gmgn.ai page
-      console.log('No CAs found, sending caDetected message with empty contractAddress');
+      // No CAs found, sending message with empty contractAddress
+      console.log('No CAs found, sending message with empty contractAddress');
       chrome.runtime.sendMessage({
-        action: 'caDetected',
+        type: 'CA_DETECTED_ON_X',
         contractAddress: '',
         url: window.location.href
+      }, response => {
+        if (chrome.runtime.lastError) {
+          console.log(`Error sending message: ${chrome.runtime.lastError.message}`);
+        } else if (response) {
+          console.log(`Service worker response received: ${JSON.stringify(response)}`);
+        }
       });
     }
   }
@@ -730,13 +735,21 @@
       
       // Send message to the extension to load the gmgn.ai page
       try {
+        // Using consistent message format that the service worker expects
+        logToPanel(`Sending message to service worker for CA: ${ca.address}`);
         chrome.runtime.sendMessage({
-          action: 'caDetected',
+          type: 'CA_DETECTED_ON_X',  // Use 'type' instead of 'action' for consistency
           contractAddress: ca.address,
           url: window.location.href
+        }, response => {
+          if (chrome.runtime.lastError) {
+            logToPanel(`Error sending message: ${chrome.runtime.lastError.message}`);
+          } else if (response) {
+            logToPanel(`Service worker response received: ${JSON.stringify(response)}`);
+          }
         });
       } catch (error) {
-        logToPanel('Failed to send message to extension: ' + error);
+        logToPanel(`Failed to send message to extension: ${error}`);
       }
     } else {
       logToPanel('CA is the same as the last processed one, not sending again');
@@ -918,7 +931,7 @@
     highlightSpan.appendChild(caTextSpan);
     
     // Create and add Bitbot button using the extracted function
-    const button = injectAmpUi(caAddress);
+    const button = injectAmpUi(caAddress, element, false);
     highlightSpan.appendChild(button);
     
     // Replace the original text node with our highlighted version
@@ -976,7 +989,7 @@
     wrapper.appendChild(linkElement);
     
     // Create and add button to the wrapper (not the link)
-    const button = injectAmpUi(caAddress);
+    const button = injectAmpUi(caAddress, linkElement, true);
     wrapper.appendChild(button);
     
     logToPanel('Successfully highlighted link with button only');
@@ -1062,7 +1075,7 @@
   }
 
   // Function to create and inject the APM UI for a contract address
-  function injectAmpUi(caAddress) {
+  function injectAmpUi(caAddress, element, isLink) {
     // Create wrapper div
     const wrapper = document.createElement('div');
     wrapper.className = 'bitbot-ca-button'; // Keep the same class for compatibility
@@ -1136,7 +1149,26 @@
       e.stopPropagation();
       
       console.log('sendCaToApm:', caAddress);
-      // sendCaToApm(caAddress); // Function will be implemented later
+      chrome.runtime.sendMessage({
+        type: 'CA_DETECTED_ON_X',
+        contractAddress: caAddress,
+        url: window.location.href,
+        forceRefresh: true,
+      });
+      if (element) {
+        const rect = element.getBoundingClientRect();
+        const visibleHeight = window.innerHeight || document.documentElement.clientHeight;
+        const centerDistance = Math.abs(rect.top - (visibleHeight / 2));
+        processSelectedCA({
+          element,
+          address: caAddress,
+          isLink,
+          position: rect.top,
+          visibleHeight: visibleHeight,
+          centerDistance: centerDistance,
+        });
+      }
+      sendCaToApm(caAddress); // Call the implemented function
     });
     
     // Create second divider
@@ -1200,7 +1232,6 @@
   // Set up scroll event listener
   function setupScrollListener() {
     logToPanel('Setting up scroll listener');
-    let lastScrollY = window.scrollY;
     const MIN_SCROLL_THRESHOLD = 10; // Minimum pixels to scroll before triggering handler
     
     window.addEventListener('scroll', (e) => {
@@ -1269,6 +1300,10 @@
     if (this.detectorDisabled) {
       return;
     }
+    
+    // Log the received message for debugging
+    logToPanel(`Received message: ${JSON.stringify(message)}`);
+    
     if (message.action === 'checkForCAs') {
       scanForContractAddresses();
       sendResponse({ scanning: true });
@@ -1343,9 +1378,13 @@
           // Double-check if a CA was processed during the scan
           if (!lastProcessedCA) {
             chrome.runtime.sendMessage({
-              action: 'caDetected',
+              type: 'CA_DETECTED_ON_X',
               contractAddress: '',
               url: window.location.href
+            }, response => {
+              if (chrome.runtime.lastError) {
+                logToPanel(`Error sending message: ${chrome.runtime.lastError.message}`);
+              }
             });
           }
         }, 100); // Small delay to ensure scanForContractAddresses has finished
@@ -1409,6 +1448,49 @@
     }
     
     document.body.removeChild(textArea);
+  }
+
+  // Function to send CA to APM panel
+  function sendCaToApm(caAddress) {
+    if (!caAddress) return;
+    
+    logToPanel(`Sending OPEN_APM_PANEL message to service worker for CA: ${caAddress}`);
+    
+    try {
+      chrome.runtime.sendMessage({
+        type: 'OPEN_APM_PANEL',
+        contractAddress: caAddress,
+        url: window.location.href
+      }, response => {
+        console.log('Service worker response for OPEN_APM_PANEL:', response);
+        if (chrome.runtime.lastError) {
+          logToPanel(`Error sending OPEN_APM_PANEL message: ${chrome.runtime.lastError.message}`);
+        } else if (response) {
+          if (response.sidePanelOpened) {
+            setTimeout(() => {
+              chrome.runtime.sendMessage({
+                type: 'CA_DETECTED_ON_X',
+                contractAddress: caAddress,
+                url: window.location.href,
+                forceRefresh: true,
+              });
+            }, 500);
+            setTimeout(() => {
+              chrome.runtime.sendMessage({
+                type: 'CA_DETECTED_ON_X',
+                contractAddress: caAddress,
+                url: window.location.href,
+                forceRefresh: true,
+              });
+            }, 2500);
+          } else {
+            console.error(`Side panel not opened: ${response.error}`);
+          }
+        }
+      });
+    } catch (error) {
+      logToPanel(`Failed to send OPEN_APM_PANEL message: ${error}`);
+    }
   }
 
   initialize();
