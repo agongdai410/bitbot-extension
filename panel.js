@@ -24,6 +24,7 @@ document.addEventListener('DOMContentLoaded', () => {
   const MAX_RETRIES = 3;
   // Track current active iframe
   let currentActiveIframe = 'x';
+  let currentCa = '';
   // Track history for each iframe - initialize from localStorage if available
   let xHistory = apmUtils.loadFromLocalStorage('x_history', { current: -1, urls: [] });
   let gmgnHistory = apmUtils.loadFromLocalStorage('gmgn_history', { current: -1, urls: [] });
@@ -200,6 +201,11 @@ document.addEventListener('DOMContentLoaded', () => {
   
   // Function to extract contract address from gmgn.ai token URL
   function extractContractAddress(url) {
+    const parts = url.split('search?q=');
+    if (parts.length > 1) {
+      return parts[1];
+    }
+
     // URL pattern: https://gmgn.ai/sol/token/CONTRACT_ADDRESS
     // or https://gmgn.ai/sol/token/[referral_code]_[CA]
     const matches = url.match(/\/token\/([^\/\?#]+)/);
@@ -253,7 +259,9 @@ document.addEventListener('DOMContentLoaded', () => {
     showLoading(true);
     showFailedToLoadNotification(false); // Hide failed notification on new load attempt
     showNotification(loadingMessage, false);
-      
+
+    currentCa = extractContractAddress(url);
+    
     try {
       // Pre-notify service worker about the upcoming navigation
       await notifyServiceWorkerAndWait(url, iframeId);
@@ -590,12 +598,16 @@ document.addEventListener('DOMContentLoaded', () => {
   
   // Add event listener to document to close settings when clicking outside
   fullScreenMask.addEventListener('click', toggleSettingsPopup);
+
+  const getApmTradeUrl = () => {
+    return `https://t.me/apmfun_bot${currentCa ? `?start=trade-${currentCa}_XXXXXX` : ''}`;
+  }
   
   // Trade button to open Bitbot in a new tab
   const tradeButton = document.getElementById('trade-button');
   if (tradeButton) {
     tradeButton.addEventListener('click', () => {
-      window.open('https://www.bitbot.app/', '_blank');
+      window.open(getApmTradeUrl(), '_blank');
     });
   }
   

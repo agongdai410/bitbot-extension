@@ -80,7 +80,7 @@
     
     // Add click handler
     buttonContainer.addEventListener('click', () => {
-      window.open(`https://t.me/test_newbitbot?start=trade-${contractAddress}`, '_blank');
+      window.open(`https://t.me/apmfun_bot?start=trade-${contractAddress}_XXXXXX`, '_blank');
     });
     
     // Add the icon
@@ -105,8 +105,25 @@
       font-size: 12px;
       color: #14151A;
       padding: 0 12px;
+      font-family: 'IBM Plex Sans', MiSans, "Microsoft YaHei", sans-serif;
+      white-space: nowrap;
     `;
     buttonContainer.appendChild(textElement);
+    
+    // Function to check window size and update text visibility
+    function updateButtonResponsiveness() {
+      if (window.innerWidth < 1024) {
+        textElement.style.display = 'none';
+      } else {
+        textElement.style.display = 'flex';
+      }
+    }
+    
+    // Set initial state
+    updateButtonResponsiveness();
+    
+    // Listen for window resize events
+    window.addEventListener('resize', updateButtonResponsiveness);
 
     // Insert the button container into the specified DOM location
     function insertButtonToTargetLocation() {

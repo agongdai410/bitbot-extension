@@ -1,19 +1,16 @@
 {
   "manifest_version": 3,
-  "name": "Bitbot X Panel",
-  "version": "1.0",
-  "description": "View Twitter & gmgn.ai in a side panel",
+  "name": "APM Copilot",
+  "version": "0.1.0",
+  "description": "View K-line charts and market trends simultaneously without switching between pages; stay ahead to achieve higher returns.",
   "permissions": [
     "sidePanel",
     "declarativeNetRequest",
     "declarativeNetRequestWithHostAccess",
     "tabs",
-    "activeTab",
     "storage",
-    "scripting",
     "sidePanel.open",
     "webRequest",
-    "webRequestBlocking",
     "clipboardWrite"
   ],
   "host_permissions": [

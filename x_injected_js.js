@@ -1112,7 +1112,7 @@
       e.stopPropagation();
       
       // Open Telegram bot with the contract address
-      window.open(`https://t.me/test_newbitbot?start=trade-${caAddress}`, '_blank');
+      window.open(`https://t.me/apmfun_bot?start=trade-${caAddress}_XXXXXX`, '_blank');
     });
     
     // Create first divider
@@ -1148,7 +1148,6 @@
       e.preventDefault();
       e.stopPropagation();
       
-      console.log('sendCaToApm:', caAddress);
       chrome.runtime.sendMessage({
         type: 'CA_DETECTED_ON_X',
         contractAddress: caAddress,
