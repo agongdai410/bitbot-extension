@@ -1,14 +1,13 @@
 {
   "manifest_version": 3,
   "name": "APM Copilot",
-  "version": "0.1.0",
+  "version": "0.1.2",
   "description": "View K-line charts and market trends simultaneously without switching between pages; stay ahead to achieve higher returns.",
   "permissions": [
     "sidePanel",
     "declarativeNetRequest",
     "declarativeNetRequestWithHostAccess",
     "tabs",
-    "storage",
     "sidePanel.open",
     "webRequest",
     "clipboardWrite"
