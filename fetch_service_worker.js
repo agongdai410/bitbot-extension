@@ -347,13 +347,13 @@ async function initializeHeaderRules() {
       removeRuleIds: [1, 2, 3, 4, 5, 6, 7, 8]
     });
     
-    // Add rules
+    // Add minimal, lower-priority rules that won't interfere with other extensions
     await chrome.declarativeNetRequest.updateSessionRules({
       addRules: [
-        // Rule 1: Higher priority rule specifically for gmgn.ai
+        // Rule 1: Remove security headers for gmgn.ai (lower priority)
         {
           id: 1,
-          priority: 9999, // Extremely high priority specifically for gmgn.ai
+          priority: 100, // Lower priority than before
           action: {
             type: chrome.declarativeNetRequest.RuleActionType.MODIFY_HEADERS,
             responseHeaders: [
@@ -375,107 +375,21 @@ async function initializeHeaderRules() {
             urlFilter: "*gmgn.ai*",
             resourceTypes: [
               chrome.declarativeNetRequest.ResourceType.MAIN_FRAME,
-              chrome.declarativeNetRequest.ResourceType.SUB_FRAME,
-              chrome.declarativeNetRequest.ResourceType.XMLHTTPREQUEST
+              chrome.declarativeNetRequest.ResourceType.SUB_FRAME
             ]
           }
         },
         
-        // Rule 2: Remove security headers for all Cloudflare domains
+        // Rule 2: Remove security headers for all Cloudflare domains (minimal approach)
         {
           id: 2,
-          priority: 1000,
+          priority: 100,
           action: {
             type: chrome.declarativeNetRequest.RuleActionType.MODIFY_HEADERS,
             responseHeaders: HEADERS_TO_REMOVE.map(header => ({
               header: header,
               operation: chrome.declarativeNetRequest.HeaderOperation.REMOVE
             }))
-          },
-          condition: {
-            domains: CLOUDFLARE_DOMAINS,
-            resourceTypes: [
-              chrome.declarativeNetRequest.ResourceType.MAIN_FRAME,
-              chrome.declarativeNetRequest.ResourceType.SUB_FRAME,
-              chrome.declarativeNetRequest.ResourceType.XMLHTTPREQUEST
-            ]
-          }
-        },
-        
-        // Rule 3: Set Desktop UA for Cloudflare domains
-        {
-          id: 3,
-          priority: 1000,
-          action: {
-            type: chrome.declarativeNetRequest.RuleActionType.MODIFY_HEADERS,
-            requestHeaders: [
-              {
-                header: "User-Agent",
-                operation: chrome.declarativeNetRequest.HeaderOperation.SET,
-                value: DESKTOP_USER_AGENT
-              },
-              {
-                header: "Sec-Fetch-Dest",
-                operation: chrome.declarativeNetRequest.HeaderOperation.SET,
-                value: "document"
-              }
-            ]
-          },
-          condition: {
-            domains: CLOUDFLARE_DOMAINS,
-            resourceTypes: [
-              chrome.declarativeNetRequest.ResourceType.MAIN_FRAME,
-              chrome.declarativeNetRequest.ResourceType.SUB_FRAME,
-              chrome.declarativeNetRequest.ResourceType.XMLHTTPREQUEST,
-              chrome.declarativeNetRequest.ResourceType.SCRIPT,
-              chrome.declarativeNetRequest.ResourceType.STYLESHEET,
-              chrome.declarativeNetRequest.ResourceType.IMAGE
-            ]
-          }
-        },
-        
-        // Rule 4: Add Access-Control-Allow-Origin header for Cloudflare domains
-        {
-          id: 4,
-          priority: 1000,
-          action: {
-            type: chrome.declarativeNetRequest.RuleActionType.MODIFY_HEADERS,
-            responseHeaders: [
-              {
-                header: "Access-Control-Allow-Origin",
-                operation: chrome.declarativeNetRequest.HeaderOperation.SET,
-                value: "*"
-              }
-            ]
-          },
-          condition: {
-            domains: CLOUDFLARE_DOMAINS,
-            resourceTypes: [
-              chrome.declarativeNetRequest.ResourceType.MAIN_FRAME,
-              chrome.declarativeNetRequest.ResourceType.SUB_FRAME,
-              chrome.declarativeNetRequest.ResourceType.XMLHTTPREQUEST
-            ]
-          }
-        },
-        
-        // Rule 5: Add header that helps with Cloudflare detection
-        {
-          id: 5,
-          priority: 1000,
-          action: {
-            type: chrome.declarativeNetRequest.RuleActionType.MODIFY_HEADERS,
-            requestHeaders: [
-              {
-                header: "Sec-Fetch-Mode",
-                operation: chrome.declarativeNetRequest.HeaderOperation.SET,
-                value: "navigate"
-              },
-              {
-                header: "Sec-Fetch-Site",
-                operation: chrome.declarativeNetRequest.HeaderOperation.SET,
-                value: "none"
-              }
-            ]
           },
           condition: {
             domains: CLOUDFLARE_DOMAINS,
@@ -862,14 +776,14 @@ function generateTwitterWrapperResponse(twitterUrl) {
 // Handle Cloudflare-protected sites
 async function handleCloudflareRequest(event, url) {
   try {
-    // Create a modified request with desktop user agent
+    // Create a modified request with minimal changes
     const modifiedHeaders = new Headers(event.request.headers);
-    modifiedHeaders.set('User-Agent', DESKTOP_USER_AGENT);
+    
+    // Don't modify User-Agent - this might be causing conflicts
+    // Only set essential headers
     modifiedHeaders.set('Sec-Fetch-Dest', 'document');
     modifiedHeaders.set('Sec-Fetch-Mode', 'navigate');
     modifiedHeaders.set('Sec-Fetch-Site', 'none');
-    modifiedHeaders.set('Accept', 'text/html,application/xhtml+xml,application/xml;q=0.9,image/webp,*/*;q=0.8');
-    modifiedHeaders.set('Accept-Language', 'en-US,en;q=0.5');
     
     // Create new request with modified headers
     const modifiedRequest = new Request(url, {
@@ -892,38 +806,27 @@ async function handleCloudflareRequest(event, url) {
       // Create a modified version with frame-busting prevention
       let modifiedText = originalText;
       
-      // Add CSP meta tag to allow unsafe-inline scripts
+      // Minimal script injection that won't interfere with the page
       modifiedText = modifiedText.replace('<head>', 
         `<head>
         <meta http-equiv="Content-Security-Policy" content="default-src * 'unsafe-inline' 'unsafe-eval' data: blob:; frame-src *;">
         <script>
-        // Prevents frame busting by overriding key properties
+        // Minimal frame-busting prevention
         try {
-          // Keep a reference to the original Object.defineProperty
-          const originalDefineProperty = Object.defineProperty;
-          
-          // Override top, parent, self, etc.
-          originalDefineProperty(window, 'top', { 
+          // Override key window properties
+          Object.defineProperty(window, 'top', { 
             get: function() { return window; },
-            configurable: false
-          });
-          originalDefineProperty(window, 'parent', { 
-            get: function() { return window; },
-            configurable: false
-          });
-          originalDefineProperty(window, 'self', { 
-            get: function() { return window; },
-            configurable: false
-          });
-          originalDefineProperty(window, 'frameElement', {
-            get: function() { return null; },
             configurable: false
           });
           
-          // Override all frame-busting checks
-          function handleFrameChecks() {
+          Object.defineProperty(window, 'parent', { 
+            get: function() { return window; },
+            configurable: false
+          });
+          
+          // Basic Cloudflare element visibility
+          function makeVisible() {
             if (document.body) {
-              // Cloudflare needs iframes to be visible
               document.querySelectorAll('iframe[src*="challenges"], .cf-turnstile, iframe[src*="turnstile"]').forEach(el => {
                 el.style.display = 'block';
                 el.style.visibility = 'visible';
@@ -932,22 +835,20 @@ async function handleCloudflareRequest(event, url) {
             }
           }
           
-          // Check immediately and periodically
-          setInterval(handleFrameChecks, 500);
-          handleFrameChecks();
+          // Run periodically
+          setInterval(makeVisible, 500);
+          makeVisible();
           
-          // Also watch for future changes
+          // Basic mutation observer
           if (window.MutationObserver) {
-            new MutationObserver(function(mutations) {
-              handleFrameChecks();
-            }).observe(document, { 
+            new MutationObserver(makeVisible).observe(document.body || document, { 
               childList: true, 
               subtree: true,
               attributes: true
             });
           }
           
-          console.log('Frame-busting prevention applied');
+          console.log('Basic frame-busting prevention applied');
         } catch(e) {
           console.error('Error in frame-busting prevention:', e);
         }
@@ -965,14 +866,13 @@ async function handleCloudflareRequest(event, url) {
       newHeaders.delete('Content-Security-Policy');
       newHeaders.delete('content-security-policy');
       
-      // Add permissive headers
+      // Only add essential permissive headers
       newHeaders.set('Access-Control-Allow-Origin', '*');
-      newHeaders.set('X-Frame-Options-Modified', 'true');
       
       return new Response(modifiedText, {
           status: response.status,
           statusText: response.statusText,
-        headers: newHeaders
+          headers: newHeaders
         });
       }
     
@@ -1165,4 +1065,4 @@ async function notifyClientsAboutToken(tokenAddress, gmgnUrl) {
       gmgnUrl: gmgnUrl
     });
   });
-} 
+}
